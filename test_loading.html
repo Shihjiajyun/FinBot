@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading 測試</title>
+    <link href="php/css/index.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        .test-btn {
+            background: #2c5aa0;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .test-btn:hover {
+            background: #1e4080;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background: rgba(255,255,255,0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>Loading 元素測試</h1>
+    
+    <div class="status" id="status">
+        正在檢查loading元素狀態...
+    </div>
+    
+    <button class="test-btn" onclick="showLoadingTest()">顯示Loading</button>
+    <button class="test-btn" onclick="hideLoadingTest()">隱藏Loading</button>
+    <button class="test-btn" onclick="checkLoadingStatus()">檢查狀態</button>
+
+    <!-- 複製fullscreen-loading元素 -->
+    <div class="fullscreen-loading" id="fullscreen-loading">
+        <div class="loading-overlay">
+            <div class="loading-content">
+                <div class="spinner-large"></div>
+                <h3>🤖 FinBot 正在分析中...</h3>
+                <p id="loading-text">正在分析您的問題並搜尋相關財報數據</p>
+                <div class="loading-steps">
+                    <div class="step" id="step1">📋 分析問題類型</div>
+                    <div class="step" id="step2">🔍 搜尋財報數據</div>
+                    <div class="step" id="step3">🧠 AI 智能分析</div>
+                    <div class="step" id="step4">📊 生成專業回答</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function checkLoadingStatus() {
+            const loading = document.getElementById('fullscreen-loading');
+            const status = document.getElementById('status');
+            
+            const computedStyle = window.getComputedStyle(loading);
+            const display = computedStyle.display;
+            const visibility = computedStyle.visibility;
+            const opacity = computedStyle.opacity;
+            
+            status.innerHTML = `
+                <strong>Loading 元素狀態:</strong><br>
+                display: ${display}<br>
+                visibility: ${visibility}<br>
+                opacity: ${opacity}<br>
+                classList: ${loading.className}<br>
+                是否可見: ${display !== 'none' && visibility !== 'hidden' && opacity !== '0'}
+            `;
+        }
+
+        function showLoadingTest() {
+            const loading = document.getElementById('fullscreen-loading');
+            loading.classList.add('show');
+            checkLoadingStatus();
+        }
+
+        function hideLoadingTest() {
+            const loading = document.getElementById('fullscreen-loading');
+            loading.classList.remove('show');
+            checkLoadingStatus();
+        }
+
+        // 頁面載入時檢查狀態
+        window.onload = function() {
+            checkLoadingStatus();
+        };
+    </script>
+</body>
+</html> 

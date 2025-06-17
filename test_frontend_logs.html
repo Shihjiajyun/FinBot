@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPT 通信日誌測試</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            padding: 20px;
+        }
+        .log-section {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #2c5aa0;
+        }
+        .log-title {
+            color: #4a9eff;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .log-content {
+            background: #2a2a2a;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .test-btn {
+            background: #2c5aa0;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        .test-btn:hover {
+            background: #1e4080;
+        }
+        .timestamp {
+            color: #888;
+            font-size: 11px;
+        }
+        .error {
+            color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>GPT 通信日誌測試</h1>
+    
+    <button class="test-btn" onclick="testGPTCommunication()">測試 GPT 通信</button>
+    <button class="test-btn" onclick="clearLogs()">清除日誌</button>
+    
+    <div id="results"></div>
+
+    <script>
+        async function testGPTCommunication() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p>正在發送請求...</p>';
+
+            try {
+                const formData = new FormData();
+                formData.append('action', 'ask');
+                formData.append('question', '[AMZN] 2024年的營運重點是什麼？');
+
+                const response = await fetch('php/api_improved.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayLogs(data);
+                } else {
+                    resultsDiv.innerHTML = `<div class="error">錯誤: ${data.error}</div>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">請求失敗: ${error.message}</div>`;
+            }
+        }
+
+        function displayLogs(data) {
+            const resultsDiv = document.getElementById('results');
+            let html = '<h2>GPT 通信結果</h2>';
+
+            // 顯示最終答案
+            html += `
+                <div class="log-section">
+                    <div class="log-title">最終答案</div>
+                    <div class="log-content">${data.answer}</div>
+                </div>
+            `;
+
+            // 顯示GPT日誌
+            if (data.gpt_logs) {
+                html += '<h3>GPT 通信詳細日誌</h3>';
+
+                // 第一次通信 - 分析問題
+                if (data.gpt_logs.first_request) {
+                    html += `
+                        <div class="log-section">
+                            <div class="log-title">第一次 GPT 請求 - 分析問題類型</div>
+                            <div class="timestamp">時間: ${data.gpt_logs.first_request.timestamp}</div>
+                            <div class="log-content">
+<strong>System Prompt:</strong>
+${data.gpt_logs.first_request.system_prompt}
+
+<strong>User Prompt:</strong>
+${data.gpt_logs.first_request.user_prompt}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (data.gpt_logs.first_response) {
+                    html += `
+                        <div class="log-section">
+                            <div class="log-title">第一次 GPT 回應</div>
+                            <div class="timestamp">時間: ${data.gpt_logs.first_response.timestamp}</div>
+                            <div class="log-content">${data.gpt_logs.first_response.response}</div>
+                        </div>
+                    `;
+                }
+
+                // 第二次通信 - 分析財報數據
+                if (data.gpt_logs.second_request) {
+                    html += `
+                        <div class="log-section">
+                            <div class="log-title">第二次 GPT 請求 - 分析財報數據</div>
+                            <div class="timestamp">時間: ${data.gpt_logs.second_request.timestamp}</div>
+                            <div class="log-content">
+<strong>System Prompt:</strong>
+${data.gpt_logs.second_request.system_prompt}
+
+<strong>User Prompt (前1000字符):</strong>
+${data.gpt_logs.second_request.user_prompt.substring(0, 1000)}...
+
+<strong>數據摘要長度:</strong> ${data.gpt_logs.second_request.data_summary_length} 字符
+
+<strong>財報數據信息:</strong>
+Form 4 數量: ${data.gpt_logs.second_request.filing_data_info.form4_count}
+10-K 數量: ${data.gpt_logs.second_request.filing_data_info.form10k_count}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (data.gpt_logs.second_response) {
+                    html += `
+                        <div class="log-section">
+                            <div class="log-title">第二次 GPT 回應</div>
+                            <div class="timestamp">時間: ${data.gpt_logs.second_response.timestamp}</div>
+                            <div class="log-content">
+<strong>回應長度:</strong> ${data.gpt_logs.second_response.response_length} 字符
+
+<strong>回應內容:</strong>
+${data.gpt_logs.second_response.response}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            // 顯示數據分析結果
+            if (data.data_analysis) {
+                html += `
+                    <div class="log-section">
+                        <div class="log-title">數據分析結果</div>
+                        <div class="log-content">${data.data_analysis}</div>
+                    </div>
+                `;
+            }
+
+            // 顯示財報數據摘要
+            if (data.filing_data_summary) {
+                html += `
+                    <div class="log-section">
+                        <div class="log-title">財報數據摘要</div>
+                        <div class="log-content">${JSON.stringify(data.filing_data_summary, null, 2)}</div>
+                    </div>
+                `;
+            }
+
+            resultsDiv.innerHTML = html;
+        }
+
+        function clearLogs() {
+            document.getElementById('results').innerHTML = '';
+        }
+ 

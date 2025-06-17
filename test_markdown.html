@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown 測試</title>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
+    <link rel="stylesheet" href="php/css/index.css">
+</head>
+<body style="padding: 20px; background: var(--dark-bg); color: white;">
+    <h1>🧪 Markdown 渲染測試</h1>
+    
+    <div style="margin: 20px 0;">
+        <h3>測試文本：</h3>
+        <textarea id="markdown-input" style="width: 100%; height: 200px; background: #333; color: white; border: 1px solid #555; padding: 10px;">### 營運重點
+
+1. **客戶中心化**：
+Amazon致力於成為全球最以客戶為中心的公司，這一理念將指導其所有業務決策。
+
+2. **業務組織**：
+Amazon的業務分為三個主要部分：
+- **北美**：主要針對美國和加拿大市場。
+- **國際**：涵蓋其他國家和地區的業務。
+- **Amazon Web Services (AWS)**：提供雲計算服務。
+
+### 總結
+2024年，Amazon的營運重點將圍繞客戶中心化的理念。</textarea>
+    </div>
+    
+    <button onclick="renderMarkdown()" style="padding: 10px 20px; background: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">渲染 Markdown</button>
+    
+    <div style="margin: 20px 0;">
+        <h3>渲染結果：</h3>
+        <div id="rendered-output" class="message-text" style="background: var(--dark-sidebar); padding: 20px; border-radius: 10px; border: 1px solid var(--dark-border);"></div>
+    </div>
+
+    <script>
+        const md = window.markdownit({
+            html: true,
+            linkify: true,
+            typographer: true
+        });
+        
+        function renderMarkdown() {
+            const input = document.getElementById('markdown-input').value;
+            const output = document.getElementById('rendered-output');
+            output.innerHTML = md.render(input);
+        }
+        
+        // 自動渲染
+        renderMarkdown();
+    </script>
+</body>
+</html> 

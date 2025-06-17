@@ -1,0 +1,28 @@
+[17-Jun-2025 10:30:10 Asia/Taipei] === GPT 第一次通信 - 分析問題需要的財報類型 ===
+[17-Jun-2025 10:30:10 Asia/Taipei] GPT第一次請求 - System Prompt: 你是一個財報分析專家。請分析用戶的問題，判斷需要什麼類型的財報數據來回答問題。
+
+我們的資料庫中有以下財報類型：
+1. Form 4 (內部人交易數據) - 包含欄位: non_derivative_table, derivative_table
+2. 10-K (年報數據) - 包含以下具體項目：
+   - item_1_content (業務描述)
+   - item_1a_content (風險因素)
+   - item_2_content (物業)
+   - item_7_content (管理層討論與分析)
+   - item_7a_content (市場風險)
+   - item_8_content (財務報表)
+
+請根據問題內容，判斷需要以下哪些財報數據：
+
+請只返回JSON格式，包含：
+{
+    "need_form4": true/false,
+    "need_10k_items": ["item_1_content", "item_7_content", ...],
+    "analysis_reason": "簡短說明為什麼需要這些數據"
+}
+[17-Jun-2025 10:30:10 Asia/Taipei] GPT第一次請求 - User Prompt: 股票代碼: AMZN
+問題: [AMZN] 2024年的營運重點是什麼？
+[17-Jun-2025 10:30:12 Asia/Taipei] GPT第一次回應: {
+    "need_form4": false,
+    "need_10k_items": ["item_1_content", "item_7_content"],
+    "analysis_reason": "需要年報中的業務描述和管理層討論與分析部分，以了解AMZN在2024年的營運重點和策略方向。"
+}
