@@ -281,45 +281,66 @@ function getAnswerFromGPT($question, $stock_symbol, $filing_data, $data_analysis
 - 10-K Item 7A: 市場風險
 - 10-K Item 8: 財務報表";
 
+    // 解析GPT的第一次分析結果
+    $analysis_result = json_decode($data_analysis, true);
+
     // 準備財報數據摘要
     $data_summary = "股票代碼: {$stock_symbol}\n";
-    $data_summary .= "數據分析結果: {$data_analysis}\n\n";
+    $data_summary .= "GPT分析需求: {$data_analysis}\n\n";
 
     // 處理Form 4數據
     if (!empty($filing_data['form4_data'])) {
-        $data_summary .= "=== Form 4 內部人交易數據 ===\n";
-        foreach (array_slice($filing_data['form4_data'], 0, 5) as $form4) {
-            $data_summary .= "日期: {$form4['report_date']}, 申報人: {$form4['company_name']}\n";
+        $data_summary .= "=== 找到的 Form 4 內部人交易數據 ===\n";
+        $data_summary .= "共找到 " . count($filing_data['form4_data']) . " 筆Form 4記錄\n\n";
+
+        foreach (array_slice($filing_data['form4_data'], 0, 5) as $index => $form4) {
+            $form_number = $index + 1;
+            $data_summary .= "Form 4 #{$form_number}:\n";
+            $data_summary .= "- 公司: {$form4['company_name']}\n";
+            $data_summary .= "- 報告日期: {$form4['report_date']}\n";
+            $data_summary .= "- 申報編號: {$form4['accession_number']}\n";
+
             if (!empty($form4['non_derivative_table'])) {
-                $data_summary .= "交易摘要: " . substr($form4['non_derivative_table'], 0, 500) . "...\n";
+                $data_summary .= "- 非衍生性證券交易:\n" . substr($form4['non_derivative_table'], 0, 800) . "...\n";
             }
-            $data_summary .= "---\n";
+            if (!empty($form4['derivative_table'])) {
+                $data_summary .= "- 衍生性證券交易:\n" . substr($form4['derivative_table'], 0, 800) . "...\n";
+            }
+            $data_summary .= "---\n\n";
         }
     }
 
     // 處理10-K數據
     if (!empty($filing_data['form10k_data'])) {
-        $data_summary .= "\n=== 10-K 年報數據 ===\n";
-        foreach ($filing_data['form10k_data'] as $form10k) {
-            $data_summary .= "年份: {$form10k['filing_year']}, 報告日期: {$form10k['report_date']}\n";
+        $data_summary .= "=== 找到的 10-K 年報數據 ===\n";
+        $data_summary .= "共找到 " . count($filing_data['form10k_data']) . " 筆10-K記錄\n\n";
+
+        foreach ($filing_data['form10k_data'] as $index => $form10k) {
+            $form_number = $index + 1;
+            $data_summary .= "10-K #{$form_number}:\n";
+            $data_summary .= "- 公司: {$form10k['company_name']}\n";
+            $data_summary .= "- 財報年份: {$form10k['filing_year']}\n";
+            $data_summary .= "- 報告日期: {$form10k['report_date']}\n";
+            $data_summary .= "- 申報編號: {$form10k['accession_number']}\n";
 
             // 根據需要的項目添加數據
             $items_mapping = [
-                'item_1_content' => 'Item 1 - 業務描述',
-                'item_1a_content' => 'Item 1A - 風險因素',
-                'item_2_content' => 'Item 2 - 物業',
-                'item_7_content' => 'Item 7 - MD&A',
-                'item_7a_content' => 'Item 7A - 市場風險',
-                'item_8_content' => 'Item 8 - 財務報表'
+                'item_1_content' => 'Item 1. Business (業務描述)',
+                'item_1a_content' => 'Item 1A. Risk Factors (風險因素)',
+                'item_2_content' => 'Item 2. Properties (物業)',
+                'item_7_content' => 'Item 7. Management Discussion and Analysis (管理層討論與分析)',
+                'item_7a_content' => 'Item 7A. Market Risk (市場風險)',
+                'item_8_content' => 'Item 8. Financial Statements (財務報表)'
             ];
 
             foreach ($items_mapping as $column => $description) {
                 if (!empty($form10k[$column])) {
-                    $data_summary .= "\n{$description}:\n";
-                    $data_summary .= substr($form10k[$column], 0, 3000) . "...\n";
+                    $content_length = strlen($form10k[$column]);
+                    $data_summary .= "\n{$description} (長度: {$content_length} 字符):\n";
+                    $data_summary .= substr($form10k[$column], 0, 4000) . "...\n";
                 }
             }
-            $data_summary .= "================\n";
+            $data_summary .= "================\n\n";
         }
     }
 
