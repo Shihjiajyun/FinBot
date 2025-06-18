@@ -136,6 +136,7 @@ function analyzeQuestionWithGPT($question, $stock_symbol, &$gpt_logs)
    - item_7_content (Item 7. MD&A - 管理層討論與分析)
    - item_7a_content (Item 7A. Market Risk - 市場風險)
    - item_8_content (Item 8. Financial Statements - 財務報表)
+3. 13F-HR (機構持股報告) - 包含欄位: form_13f_hr_content (完整的13F-HR持股數據)
 
 請根據問題內容，具體指定需要哪些財報文件和項目：
 
@@ -144,8 +145,10 @@ function analyzeQuestionWithGPT($question, $stock_symbol, &$gpt_logs)
     \"need_form4\": true/false,
     \"need_10k_years\": [2024, 2023, ...] (需要哪些年份的10-K，如果不需要則為空陣列),
     \"need_10k_items\": [\"item_1_content\", \"item_7_content\", ...] (需要10-K中的哪些具體項目),
+    \"need_13f_hr\": true/false,
+    \"need_13f_hr_years\": [2024, 2023, ...] (需要哪些年份的13F-HR，如果不需要則為空陣列),
     \"analysis_reason\": \"簡短說明為什麼需要這些特定年份和項目的數據\",
-    \"specific_requirements\": \"例如：需要AMZN 2024年10-K的業務描述和管理層分析\"
+    \"specific_requirements\": \"例如：需要AMZN 2024年10-K的業務描述和管理層分析，以及2023-2024年的13F-HR持股數據\"
 }";
 
     $user_prompt = "股票代碼: {$stock_symbol}\n問題: {$question}";
@@ -181,7 +184,9 @@ function getRelevantFilingData($pdo, $stock_symbol, $data_analysis)
         $data_analysis_array = [
             'need_form4' => false,
             'need_10k_years' => [2024, 2023],
-            'need_10k_items' => ['item_7_content', 'item_8_content']
+            'need_10k_items' => ['item_7_content', 'item_8_content'],
+            'need_13f_hr' => false,
+            'need_13f_hr_years' => [2024, 2023]
         ];
     }
 
@@ -257,6 +262,41 @@ function getRelevantFilingData($pdo, $stock_symbol, $data_analysis)
         }
     }
 
+    // 獲取13F-HR數據
+    if ($data_analysis_array['need_13f_hr']) {
+        $year_condition = "";
+        $params = ["%{$company_name}%", "%{$company_name}%"];
+
+        if (!empty($data_analysis_array['need_13f_hr_years'])) {
+            $year_placeholders = str_repeat('?,', count($data_analysis_array['need_13f_hr_years']) - 1) . '?';
+            $year_condition = " AND filing_year IN ({$year_placeholders})";
+            $params = array_merge($params, $data_analysis_array['need_13f_hr_years']);
+        }
+
+        $form13f_sql = "SELECT id, cik, company_name, filing_type, filing_year, report_date, accession_number, form_13f_hr_content
+                        FROM filings 
+                        WHERE filing_type = '13F-HR' 
+                        AND (company_name LIKE ? OR cik IN (SELECT DISTINCT cik FROM filings WHERE company_name LIKE ?))
+                        {$year_condition}
+                        ORDER BY filing_year DESC, report_date DESC 
+                        LIMIT 10";
+
+        error_log("13F-HR 查詢SQL: " . $form13f_sql);
+        error_log("查詢參數: " . json_encode($params));
+
+        $stmt = $pdo->prepare($form13f_sql);
+        $stmt->execute($params);
+        $filing_data['form13f_data'] = $stmt->fetchAll();
+
+        error_log("找到 13F-HR 數據: " . count($filing_data['form13f_data']) . " 筆");
+
+        // 記錄找到的具體年份
+        if (!empty($filing_data['form13f_data'])) {
+            $found_years = array_unique(array_column($filing_data['form13f_data'], 'filing_year'));
+            error_log("找到的13F-HR年份: " . implode(', ', $found_years));
+        }
+    }
+
     return $filing_data;
 }
 
@@ -279,7 +319,8 @@ function getAnswerFromGPT($question, $stock_symbol, $filing_data, $data_analysis
 - 10-K Item 2: 物業資訊
 - 10-K Item 7: 管理層討論與分析(MD&A)
 - 10-K Item 7A: 市場風險
-- 10-K Item 8: 財務報表";
+- 10-K Item 8: 財務報表
+- 13F-HR: 機構持股報告，包含機構投資者的持股資訊";
 
     // 解析GPT的第一次分析結果
     $analysis_result = json_decode($data_analysis, true);
@@ -344,7 +385,29 @@ function getAnswerFromGPT($question, $stock_symbol, $filing_data, $data_analysis
         }
     }
 
-    if (empty($filing_data['form4_data']) && empty($filing_data['form10k_data'])) {
+    // 處理13F-HR數據
+    if (!empty($filing_data['form13f_data'])) {
+        $data_summary .= "=== 找到的 13F-HR 機構持股數據 ===\n";
+        $data_summary .= "共找到 " . count($filing_data['form13f_data']) . " 筆13F-HR記錄\n\n";
+
+        foreach ($filing_data['form13f_data'] as $index => $form13f) {
+            $form_number = $index + 1;
+            $data_summary .= "13F-HR #{$form_number}:\n";
+            $data_summary .= "- 公司: {$form13f['company_name']}\n";
+            $data_summary .= "- 財報年份: {$form13f['filing_year']}\n";
+            $data_summary .= "- 報告日期: {$form13f['report_date']}\n";
+            $data_summary .= "- 申報編號: {$form13f['accession_number']}\n";
+
+            if (!empty($form13f['form_13f_hr_content'])) {
+                $content_length = strlen($form13f['form_13f_hr_content']);
+                $data_summary .= "\n13F-HR 持股報告內容 (長度: {$content_length} 字符):\n";
+                $data_summary .= substr($form13f['form_13f_hr_content'], 0, 3000) . "...\n";
+            }
+            $data_summary .= "================\n\n";
+        }
+    }
+
+    if (empty($filing_data['form4_data']) && empty($filing_data['form10k_data']) && empty($filing_data['form13f_data'])) {
         $data_summary .= "未找到相關財報數據。可能原因：\n";
         $data_summary .= "1. 股票代碼不正確\n";
         $data_summary .= "2. 該公司的財報數據尚未處理\n";
@@ -361,7 +424,8 @@ function getAnswerFromGPT($question, $stock_symbol, $filing_data, $data_analysis
         'data_summary_length' => strlen($data_summary),
         'filing_data_info' => [
             'form4_count' => !empty($filing_data['form4_data']) ? count($filing_data['form4_data']) : 0,
-            'form10k_count' => !empty($filing_data['form10k_data']) ? count($filing_data['form10k_data']) : 0
+            'form10k_count' => !empty($filing_data['form10k_data']) ? count($filing_data['form10k_data']) : 0,
+            'form13f_count' => !empty($filing_data['form13f_data']) ? count($filing_data['form13f_data']) : 0
         ],
         'timestamp' => date('Y-m-d H:i:s')
     ];
@@ -447,6 +511,16 @@ function summarizeFilingData($filing_data)
         $summary['form10k_count'] = count($filing_data['form10k_data']);
         $years = array_column($filing_data['form10k_data'], 'filing_year');
         $summary['form10k_years'] = array_unique($years);
+    }
+
+    if (!empty($filing_data['form13f_data'])) {
+        $summary['form13f_count'] = count($filing_data['form13f_data']);
+        $years = array_column($filing_data['form13f_data'], 'filing_year');
+        $summary['form13f_years'] = array_unique($years);
+        $summary['form13f_date_range'] = [
+            'latest' => $filing_data['form13f_data'][0]['report_date'] ?? null,
+            'earliest' => end($filing_data['form13f_data'])['report_date'] ?? null
+        ];
     }
 
     return $summary;

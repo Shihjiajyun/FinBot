@@ -203,10 +203,10 @@ class FilingProcessor:
         if not metadata.get('accession_number'):
             print(f"⚠️ 跳過文件（無法提取元數據）: {file_path}")
             return False
-        
-        # 跳過不處理的文件類型
+
+        # 跳過不處理的文件類型 (移除13F-HR，現在可以處理)
         filing_type = metadata.get('filing_type', '')
-        if filing_type in ['13F-HR', '10-Q', '8-K']:
+        if filing_type in ['10-Q', '8-K']:
             print(f"⚠️ 跳過文件類型 {filing_type}: {file_path}")
             return False
         
@@ -242,6 +242,11 @@ class FilingProcessor:
             print(f"   📋 處理10-K Items...")
             items = self.extract_10k_items(content)
             extracted_data.update(items)
+            
+        elif filing_type == '13F-HR':
+            # 13F-HR - 存儲完整內容
+            print(f"   📈 處理13F-HR機構持股數據...")
+            extracted_data['form_13f_hr_content'] = content
         
         # 插入資料庫
         try:
@@ -253,8 +258,8 @@ class FilingProcessor:
                 report_date, filed_date, filepath, file_url, content_summary,
                 item_1_content, item_1a_content, item_2_content, 
                 item_7_content, item_7a_content, item_8_content,
-                non_derivative_table, derivative_table
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                non_derivative_table, derivative_table, form_13f_hr_content
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             
             values = (
@@ -277,7 +282,9 @@ class FilingProcessor:
                 extracted_data.get('item_8_content', ''),
                 # Form 4 Tables
                 extracted_data.get('non_derivative_table', ''),
-                extracted_data.get('derivative_table', '')
+                extracted_data.get('derivative_table', ''),
+                # 13F-HR Content
+                extracted_data.get('form_13f_hr_content', '')
             )
             
             cursor.execute(sql, values)
@@ -302,8 +309,8 @@ class FilingProcessor:
         
         print(f"🔍 掃描AMZN目錄: {amzn_path}")
         
-        # 只處理Form 4和10-K文件
-        target_folders = ["4", "10-K"]
+        # 處理Form 4、10-K和13F-HR文件
+        target_folders = ["4", "10-K", "13F-HR"]
         processed = 0
         
         for folder in target_folders:
@@ -313,9 +320,9 @@ class FilingProcessor:
                 txt_files = list(folder_path.glob("*.txt"))
                 print(f"   📊 找到 {len(txt_files)} 個文件")
                 
-        for file_path in txt_files:
-            if self.process_filing_file(file_path):
-                processed += 1
+                for file_path in txt_files:
+                    if self.process_filing_file(file_path):
+                        processed += 1
             else:
                 print(f"⚠️ 資料夾不存在: {folder_path}")
                 
