@@ -86,14 +86,61 @@ function handleAsk()
     // 初始化日誌數組
     $gpt_logs = [];
 
-    // 步驟1: 讓GPT分析問題需要什麼財報數據
+    // 步驟1: 檢查問題是否已經被問過
+    $previous_answer = checkQuestionHistory($pdo, $question, $stock_symbol);
+    if ($previous_answer) {
+        error_log("=== 找到相同問題的歷史記錄 ===");
+
+        // 保存對話（如果需要）
+        if (!$conversation_id) {
+            $conversation_id = createConversation($pdo, $question);
+        }
+        saveMessage($pdo, $conversation_id, $question, $previous_answer);
+
+        json_response([
+            'success' => true,
+            'answer' => $previous_answer . "\n\n*（此答案來自歷史記錄）*",
+            'conversation_id' => $conversation_id,
+            'from_history' => true
+        ]);
+        return;
+    }
+
+    // 步驟2: 讓GPT分析問題需要什麼財報數據
     error_log("=== GPT 第一次通信 - 分析問題需要的財報類型 ===");
     $data_analysis = analyzeQuestionWithGPT($question, $stock_symbol, $gpt_logs);
 
-    // 步驟2: 根據分析結果從資料庫抓取相關財報數據
+    // 步驟3: 檢查資料庫是否有所需的財報數據
+    $data_analysis_array = json_decode($data_analysis, true);
+    if (!$data_analysis_array) {
+        // 如果GPT分析失敗，預設獲取一些基本數據
+        $data_analysis_array = [
+            'need_form4' => false,
+            'need_10k_years' => [2024, 2023],
+            'need_10k_items' => ['item_7_content', 'item_8_content'],
+            'need_13f_hr' => false,
+            'need_13f_hr_years' => []
+        ];
+    }
+
+    $missing_data = checkMissingFilingData($pdo, $stock_symbol, $data_analysis_array);
+
+    // 步驟4: 如果缺少財報數據，自動下載和處理
+    if (!empty($missing_data)) {
+        error_log("=== 發現缺少財報數據，開始自動下載和處理 ===");
+        $download_success = downloadAndProcessFilings($stock_symbol, $missing_data, $gpt_logs);
+
+        if (!$download_success) {
+            // 提供更詳細的錯誤信息
+            $missing_info = formatMissingDataInfo($missing_data, $stock_symbol);
+            throw new Exception("無法自動獲取所需的財報數據。缺少的數據：{$missing_info}。請檢查Python環境或稍後再試。");
+        }
+    }
+
+    // 步驟5: 根據分析結果從資料庫抓取相關財報數據
     $filing_data = getRelevantFilingData($pdo, $stock_symbol, $data_analysis);
 
-    // 步驟3: 將問題和財報數據一起發送給GPT獲得答案
+    // 步驟6: 將問題和財報數據一起發送給GPT獲得答案
     error_log("=== GPT 第二次通信 - 分析財報數據並回答問題 ===");
     $answer = getAnswerFromGPT($question, $stock_symbol, $filing_data, $data_analysis, $gpt_logs);
 
@@ -108,9 +155,10 @@ function handleAsk()
         'success' => true,
         'answer' => $answer,
         'conversation_id' => $conversation_id,
-        'data_analysis' => $data_analysis, // 可選：返回分析結果供調試
-        'filing_data_summary' => summarizeFilingData($filing_data), // 可選：返回使用的數據摘要
-        'gpt_logs' => $gpt_logs // 返回GPT通信日誌
+        'data_analysis' => $data_analysis,
+        'filing_data_summary' => summarizeFilingData($filing_data),
+        'gpt_logs' => $gpt_logs,
+        'missing_data_processed' => !empty($missing_data)
     ]);
 }
 
@@ -610,4 +658,320 @@ function renameConversation()
         'success' => true,
         'message' => '對話標題已更新'
     ]);
+}
+
+function checkQuestionHistory($pdo, $question, $stock_symbol)
+{
+    // 檢查是否有相同的問題（考慮股票代碼）
+    $normalized_question = normalizeQuestion($question);
+
+    $stmt = $pdo->prepare("
+        SELECT answer FROM questions 
+        WHERE LOWER(TRIM(question)) = LOWER(TRIM(?)) 
+        AND question LIKE CONCAT('%[', ?, ']%')
+        ORDER BY created_at DESC 
+        LIMIT 1
+    ");
+    $stmt->execute([$normalized_question, $stock_symbol]);
+    $result = $stmt->fetch();
+
+    return $result ? $result['answer'] : null;
+}
+
+function normalizeQuestion($question)
+{
+    // 移除股票代碼部分，只保留問題本身
+    $question = preg_replace('/\[[A-Z]{1,5}\]\s*/', '', $question);
+    return trim($question);
+}
+
+function checkMissingFilingData($pdo, $stock_symbol, $data_analysis)
+{
+    $missing_data = [];
+
+    // 根據股票代碼映射到公司名稱
+    $company_mapping = [
+        'AMZN' => 'AMAZON COM INC',
+        'AAPL' => 'APPLE INC',
+        'MSFT' => 'MICROSOFT CORP',
+        'TSLA' => 'TESLA INC',
+        'META' => 'META PLATFORMS INC',
+        'GOOGL' => 'ALPHABET INC',
+        'GOOG' => 'ALPHABET INC',
+        'NVDA' => 'NVIDIA CORP'
+    ];
+
+    $company_name = $company_mapping[$stock_symbol] ?? $stock_symbol;
+
+    // 檢查Form 4數據
+    if ($data_analysis['need_form4']) {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) as count FROM filings 
+            WHERE filing_type = '4' 
+            AND (company_name LIKE ? OR cik IN (SELECT DISTINCT cik FROM filings WHERE company_name LIKE ?))
+        ");
+        $search_pattern = "%{$company_name}%";
+        $stmt->execute([$search_pattern, $search_pattern]);
+        $count = $stmt->fetch()['count'];
+
+        if ($count == 0) {
+            $missing_data['form4'] = true;
+        }
+    }
+
+    // 檢查10-K數據
+    if (!empty($data_analysis['need_10k_years'])) {
+        foreach ($data_analysis['need_10k_years'] as $year) {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) as count FROM filings 
+                WHERE filing_type = '10-K' 
+                AND filing_year = ?
+                AND (company_name LIKE ? OR cik IN (SELECT DISTINCT cik FROM filings WHERE company_name LIKE ?))
+            ");
+            $search_pattern = "%{$company_name}%";
+            $stmt->execute([$year, $search_pattern, $search_pattern]);
+            $count = $stmt->fetch()['count'];
+
+            if ($count == 0) {
+                if (!isset($missing_data['10k_years'])) {
+                    $missing_data['10k_years'] = [];
+                }
+                $missing_data['10k_years'][] = $year;
+            }
+        }
+    }
+
+    // 檢查13F-HR數據
+    if ($data_analysis['need_13f_hr'] && !empty($data_analysis['need_13f_hr_years'])) {
+        foreach ($data_analysis['need_13f_hr_years'] as $year) {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) as count FROM filings 
+                WHERE filing_type = '13F-HR' 
+                AND filing_year = ?
+                AND (company_name LIKE ? OR cik IN (SELECT DISTINCT cik FROM filings WHERE company_name LIKE ?))
+            ");
+            $search_pattern = "%{$company_name}%";
+            $stmt->execute([$year, $search_pattern, $search_pattern]);
+            $count = $stmt->fetch()['count'];
+
+            if ($count == 0) {
+                if (!isset($missing_data['13f_hr_years'])) {
+                    $missing_data['13f_hr_years'] = [];
+                }
+                $missing_data['13f_hr_years'][] = $year;
+            }
+        }
+    }
+
+    return $missing_data;
+}
+
+function testPythonEnvironment()
+{
+    // 常見的Python路徑（根據您的環境調整）
+    $python_paths = [
+        'C:\\Users\\shihj\\anaconda3\\python.exe',  // 您的Anaconda路徑
+        'python',     // 嘗試PATH中的python
+        'python3',    // 嘗試PATH中的python3
+        'C:\\Python39\\python.exe',
+        'C:\\Python38\\python.exe',
+        'C:\\Python37\\python.exe'
+    ];
+
+    // 獲取正確的工作目錄和腳本路徑
+    $current_dir = dirname(__DIR__);  // FinBot目錄
+    $script_path = $current_dir . DIRECTORY_SEPARATOR . 'test_basic.py';
+
+    foreach ($python_paths as $python_path) {
+        $command = "\"{$python_path}\" \"{$script_path}\"";
+        error_log("測試Python路徑: {$command}");
+        error_log("測試工作目錄: {$current_dir}");
+
+        // 切換到正確的工作目錄
+        $old_cwd = getcwd();
+        chdir($current_dir);
+
+        $output = [];
+        $return_code = 0;
+        exec($command . ' 2>&1', $output, $return_code);
+
+        // 恢復原來的工作目錄
+        chdir($old_cwd);
+
+        error_log("Python測試輸出: " . implode("\n", $output));
+        error_log("Python測試返回碼: {$return_code}");
+
+        if ($return_code === 0) {
+            return [
+                'success' => true,
+                'output' => $output,
+                'return_code' => $return_code,
+                'python_command' => $python_path
+            ];
+        }
+    }
+
+    // 所有路徑都失敗
+    return [
+        'success' => false,
+        'output' => ['所有Python路徑都測試失敗'],
+        'return_code' => 9009,
+        'error' => 'No working Python installation found'
+    ];
+}
+
+function downloadAndProcessFilings($stock_symbol, $missing_data, &$gpt_logs)
+{
+    error_log("開始下載缺少的財報數據: " . json_encode($missing_data));
+
+    // 首先測試Python環境
+    $python_test = testPythonEnvironment();
+    $gpt_logs['python_test'] = $python_test;
+
+    if (!$python_test['success']) {
+        error_log("Python環境測試失敗，無法繼續");
+        error_log("Python錯誤詳情: " . print_r($python_test, true));
+        return false;
+    }
+
+    // 獲取正確的Python命令
+    $python_command = $python_test['python_command'] ?? 'python';
+
+    // 準備要下載的財報類型
+    $filing_types = [];
+    $years_to_download = [];
+
+    if (isset($missing_data['form4'])) {
+        $filing_types[] = '4';
+    }
+
+    if (isset($missing_data['10k_years'])) {
+        $filing_types[] = '10-K';
+        $years_to_download = array_merge($years_to_download, $missing_data['10k_years']);
+    }
+
+    if (isset($missing_data['13f_hr_years'])) {
+        $filing_types[] = '13F-HR';
+        $years_to_download = array_merge($years_to_download, $missing_data['13f_hr_years']);
+    }
+
+    if (empty($filing_types)) {
+        return true; // 沒有需要下載的
+    }
+
+    $years_to_download = array_unique($years_to_download);
+
+    // 記錄下載過程
+    $gpt_logs['download_process'] = [
+        'stock_symbol' => $stock_symbol,
+        'filing_types' => $filing_types,
+        'years' => $years_to_download,
+        'start_time' => date('Y-m-d H:i:s')
+    ];
+
+    // 步驟1: 執行下載
+    $download_success = executeDownloadScript($stock_symbol, $filing_types, $years_to_download, $python_command);
+
+    if (!$download_success) {
+        error_log("下載財報失敗: {$stock_symbol}");
+        return false;
+    }
+
+    // 步驟2: 處理下載的文件
+    $process_success = executeProcessScript($stock_symbol, $python_command);
+
+    if (!$process_success) {
+        error_log("處理財報失敗: {$stock_symbol}");
+        return false;
+    }
+
+    $gpt_logs['download_process']['end_time'] = date('Y-m-d H:i:s');
+    $gpt_logs['download_process']['success'] = true;
+
+    error_log("成功下載並處理財報數據: {$stock_symbol}");
+    return true;
+}
+
+function executeDownloadScript($stock_symbol, $filing_types, $years, $python_command = 'python')
+{
+    // 獲取正確的工作目錄和腳本路徑
+    $current_dir = dirname(__DIR__);  // FinBot目錄
+    $script_path = $current_dir . DIRECTORY_SEPARATOR . 'download_filings.py';
+
+    // 構建命令
+    $filing_types_str = implode(',', $filing_types);
+    $years_str = !empty($years) ? implode(',', $years) : '';
+
+    $command = "\"{$python_command}\" \"{$script_path}\" {$stock_symbol} \"{$filing_types_str}\"";
+    if (!empty($years_str)) {
+        $command .= " \"{$years_str}\"";
+    }
+
+    error_log("執行下載命令: {$command}");
+    error_log("工作目錄: {$current_dir}");
+
+    // 切換到正確的工作目錄並執行命令
+    $old_cwd = getcwd();
+    chdir($current_dir);
+
+    $output = [];
+    $return_code = 0;
+    exec($command . ' 2>&1', $output, $return_code);
+
+    // 恢復原來的工作目錄
+    chdir($old_cwd);
+
+    error_log("下載腳本輸出: " . implode("\n", $output));
+    error_log("下載腳本返回碼: {$return_code}");
+
+    return $return_code === 0;
+}
+
+function executeProcessScript($stock_symbol, $python_command = 'python')
+{
+    // 獲取正確的工作目錄和腳本路徑
+    $current_dir = dirname(__DIR__);  // FinBot目錄
+    $script_path = $current_dir . DIRECTORY_SEPARATOR . 'process_filings.py';
+
+    $command = "\"{$python_command}\" \"{$script_path}\" {$stock_symbol}";
+
+    error_log("執行處理命令: {$command}");
+    error_log("工作目錄: {$current_dir}");
+
+    // 切換到正確的工作目錄並執行命令
+    $old_cwd = getcwd();
+    chdir($current_dir);
+
+    $output = [];
+    $return_code = 0;
+    exec($command . ' 2>&1', $output, $return_code);
+
+    // 恢復原來的工作目錄
+    chdir($old_cwd);
+
+    error_log("處理腳本輸出: " . implode("\n", $output));
+    error_log("處理腳本返回碼: {$return_code}");
+
+    return $return_code === 0;
+}
+
+function formatMissingDataInfo($missing_data, $stock_symbol)
+{
+    $info_parts = [];
+
+    if (isset($missing_data['form4'])) {
+        $info_parts[] = "Form 4 內部人交易數據";
+    }
+
+    if (isset($missing_data['10k_years']) && !empty($missing_data['10k_years'])) {
+        $years = implode(', ', $missing_data['10k_years']);
+        $info_parts[] = "10-K 年報數據 ({$years}年)";
+    }
+
+    if (isset($missing_data['13f_hr_years']) && !empty($missing_data['13f_hr_years'])) {
+        $years = implode(', ', $missing_data['13f_hr_years']);
+        $info_parts[] = "13F-HR 機構持股數據 ({$years}年)";
+    }
+
+    return $stock_symbol . ' - ' . implode(', ', $info_parts);
 }

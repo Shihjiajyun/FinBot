@@ -160,7 +160,7 @@ $is_logged_in = check_login();
                             <p id="loading-text">正在分析您的問題並搜尋相關財報數據</p>
                             <div class="loading-steps">
                                 <div class="step" id="step1">📋 分析問題類型</div>
-                                <div class="step" id="step2">🔍 搜尋財報數據</div>
+                                <div class="step" id="step2">🔍 檢查財報數據</div>
                                 <div class="step" id="step3">🧠 AI 智能分析</div>
                                 <div class="step" id="step4">📊 生成專業回答</div>
                             </div>
@@ -301,7 +301,28 @@ $is_logged_in = check_login();
                         showLoading(false);
                         if (data.success) {
                             currentConversationId = data.conversation_id;
-                            addMessage(data.answer, 'bot');
+
+                            // 準備回答內容
+                            let botResponse = data.answer;
+
+                            // 如果是歷史記錄，顯示特殊標識
+                            if (data.from_history) {
+                                console.log('回答來自歷史記錄');
+                            }
+
+                            // 如果有自動下載處理，顯示額外信息
+                            if (data.missing_data_processed) {
+                                botResponse = "📥 **系統已自動為您獲取最新財報數據**\n\n" + botResponse;
+                                console.log('自動下載並處理了缺失的財報數據');
+                            }
+
+                            addMessage(botResponse, 'bot');
+
+                            // 記錄調試信息
+                            if (data.gpt_logs && data.gpt_logs.download_process) {
+                                console.log('下載處理過程:', data.gpt_logs.download_process);
+                            }
+
                             // 重新載入對話歷史
                             loadConversations();
                         } else {
@@ -367,8 +388,8 @@ $is_logged_in = check_login();
             function startLoadingSteps() {
                 const steps = ['step1', 'step2', 'step3', 'step4'];
                 const texts = [
-                    '正在分析問題類型...',
-                    '正在搜尋相關財報數據...',
+                    '正在分析問題類型和所需財報...',
+                    '正在檢查財報數據完整性...',
                     '正在進行AI智能分析...',
                     '正在生成專業回答...'
                 ];
