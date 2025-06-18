@@ -93,6 +93,10 @@ $is_logged_in = check_login();
                     <i class="bi bi-plus"></i>
                     新對話
                 </button>
+                <button class="stock-query-btn" onclick="switchToStockQuery()">
+                    <i class="bi bi-graph-up"></i>
+                    股票查詢
+                </button>
             </div>
 
             <div class="chat-history" id="chat-history">
@@ -150,7 +154,43 @@ $is_logged_in = check_login();
                 </div>
             </div>
 
-            <div class="input-area">
+            <!-- 股票查詢界面 -->
+            <div class="stock-query-container" id="stock-query-container" style="display: none;">
+                <div class="stock-query-header">
+                    <h2><i class="bi bi-graph-up"></i> 股票資訊查詢</h2>
+                    <p style="color: #8e8ea0;">輸入股票代號，獲取詳細的財務資訊</p>
+                </div>
+
+                <div class="stock-search-area">
+                    <div class="search-form">
+                        <input type="text" id="stock-ticker-input" placeholder="請輸入股票代號 (例如: AAPL, TSLA, MSFT)"
+                            class="stock-input">
+                        <button id="search-stock-btn" onclick="searchStock()">
+                            <i class="bi bi-search"></i> 查詢
+                        </button>
+                    </div>
+
+                    <div class="popular-stocks">
+                        <h5 style="color: #8e8ea0; margin-bottom: 15px;">熱門股票</h5>
+                        <div class="stock-tags">
+                            <span class="stock-tag" onclick="quickSearch('AAPL')">AAPL</span>
+                            <span class="stock-tag" onclick="quickSearch('MSFT')">MSFT</span>
+                            <span class="stock-tag" onclick="quickSearch('GOOGL')">GOOGL</span>
+                            <span class="stock-tag" onclick="quickSearch('AMZN')">AMZN</span>
+                            <span class="stock-tag" onclick="quickSearch('TSLA')">TSLA</span>
+                            <span class="stock-tag" onclick="quickSearch('META')">META</span>
+                            <span class="stock-tag" onclick="quickSearch('NVDA')">NVDA</span>
+                            <span class="stock-tag" onclick="quickSearch('NFLX')">NFLX</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stock-result-area" id="stock-result-area" style="display: none;">
+                    <!-- 股票資訊將在這裡顯示 -->
+                </div>
+            </div>
+
+            <div class="input-area" id="input-area">
                 <!-- 全屏Loading覆蓋層 -->
                 <div class="fullscreen-loading" id="fullscreen-loading">
                     <div class="loading-overlay">
@@ -427,6 +467,14 @@ $is_logged_in = check_login();
 
             function startNewChat() {
                 currentConversationId = null;
+
+                // 隱藏股票查詢界面
+                document.getElementById('stock-query-container').style.display = 'none';
+
+                // 顯示聊天界面和輸入區域
+                document.getElementById('chat-container').style.display = 'flex';
+                document.getElementById('input-area').style.display = 'block';
+
                 document.getElementById('chat-container').innerHTML = `
                 <div class="welcome-message" id="welcome-message">
                     <i class="bi bi-robot" style="font-size: 4rem; color: var(--primary-color); margin-bottom: 20px;"></i>
@@ -446,6 +494,11 @@ $is_logged_in = check_login();
 
             function loadConversation(conversationId) {
                 currentConversationId = conversationId;
+
+                // 隱藏股票查詢界面，顯示聊天界面
+                document.getElementById('stock-query-container').style.display = 'none';
+                document.getElementById('chat-container').style.display = 'flex';
+                document.getElementById('input-area').style.display = 'block';
 
                 // 標記為活躍
                 document.querySelectorAll('.history-item').forEach(item => {
@@ -486,6 +539,180 @@ $is_logged_in = check_login();
                 document.querySelector('.sidebar').classList.toggle('show');
             }
 
+            function switchToStockQuery() {
+                // 隱藏聊天界面和輸入區域
+                document.getElementById('chat-container').style.display = 'none';
+                document.getElementById('preset-questions').style.display = 'none';
+                document.getElementById('input-area').style.display = 'none';
+
+                // 顯示股票查詢界面
+                document.getElementById('stock-query-container').style.display = 'block';
+
+                // 移除歷史記錄的活躍狀態
+                document.querySelectorAll('.history-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+
+                // 清空當前對話ID
+                currentConversationId = null;
+            }
+
+            function backToChat() {
+                // 隱藏股票查詢界面
+                document.getElementById('stock-query-container').style.display = 'none';
+                document.getElementById('stock-result-area').style.display = 'none';
+
+                // 顯示聊天界面和輸入區域
+                document.getElementById('chat-container').style.display = 'flex';
+                document.getElementById('preset-questions').style.display = 'flex';
+                document.getElementById('input-area').style.display = 'block';
+            }
+
+            function searchStock() {
+                const ticker = document.getElementById('stock-ticker-input').value.trim().toUpperCase();
+                if (!ticker) {
+                    alert('請輸入股票代號');
+                    return;
+                }
+
+                // 顯示載入狀態
+                const resultArea = document.getElementById('stock-result-area');
+                resultArea.style.display = 'block';
+                resultArea.innerHTML = `
+                    <div class="stock-loading">
+                        <div class="spinner-large"></div>
+                        <h4>正在查詢 ${ticker} 的股票資訊...</h4>
+                        <p>請稍候，正在從Yahoo Finance獲取最新數據</p>
+                    </div>
+                `;
+
+                // 發送請求到後端
+                const formData = new FormData();
+                formData.append('action', 'get_stock_info');
+                formData.append('ticker', ticker);
+
+                fetch('stock_api.php', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            displayStockInfo(data.stock_info);
+                        } else {
+                            resultArea.innerHTML = `
+                            <div class="stock-error">
+                                <i class="bi bi-exclamation-triangle" style="font-size: 3rem; color: #dc3545; margin-bottom: 20px;"></i>
+                                <h4>查詢失敗</h4>
+                                <p>${data.error}</p>
+                                <button onclick="searchStock()" class="retry-btn">重試</button>
+                            </div>
+                        `;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('查詢錯誤:', error);
+                        resultArea.innerHTML = `
+                        <div class="stock-error">
+                            <i class="bi bi-wifi-off" style="font-size: 3rem; color: #dc3545; margin-bottom: 20px;"></i>
+                            <h4>網路錯誤</h4>
+                            <p>無法連接到伺服器，請檢查網路連線</p>
+                            <button onclick="searchStock()" class="retry-btn">重試</button>
+                        </div>
+                    `;
+                    });
+            }
+
+            function quickSearch(ticker) {
+                document.getElementById('stock-ticker-input').value = ticker;
+                searchStock();
+            }
+
+            function displayStockInfo(stockInfo) {
+                const resultArea = document.getElementById('stock-result-area');
+                resultArea.innerHTML = `
+                    <div class="stock-info-card">
+                        <div class="stock-header">
+                            <div class="stock-title">
+                                <h3>${stockInfo.symbol}</h3>
+                                <h4>${stockInfo.company_name || '公司名稱'}</h4>
+                                <span class="exchange-badge">${stockInfo.exchange || 'N/A'}</span>
+                            </div>
+                            <div class="stock-price">
+                                <div class="current-price">$${stockInfo.current_price || 'N/A'}</div>
+                                <div class="price-change ${stockInfo.price_change >= 0 ? 'positive' : 'negative'}">
+                                    ${stockInfo.price_change >= 0 ? '+' : ''}${stockInfo.price_change || 'N/A'} (${stockInfo.price_change_percent || 'N/A'}%)
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="stock-metrics">
+                            <div class="metric-row">
+                                <div class="metric-item">
+                                    <label>市值</label>
+                                    <value>${formatNumber(stockInfo.market_cap)} USD</value>
+                                </div>
+                                <div class="metric-item">
+                                    <label>本益比 (PE)</label>
+                                    <value>${stockInfo.pe_ratio || 'N/A'}</value>
+                                </div>
+                                <div class="metric-item">
+                                    <label>每股盈餘 (EPS)</label>
+                                    <value>${stockInfo.eps || 'N/A'}</value>
+                                </div>
+                            </div>
+                            
+                            <div class="metric-row">
+                                <div class="metric-item">
+                                    <label>股息殖利率</label>
+                                    <value>${stockInfo.dividend_yield || 'N/A'}%</value>
+                                </div>
+                                <div class="metric-item">
+                                    <label>52週高點</label>
+                                    <value>$${stockInfo.week_52_high || 'N/A'}</value>
+                                </div>
+                                <div class="metric-item">
+                                    <label>52週低點</label>
+                                    <value>$${stockInfo.week_52_low || 'N/A'}</value>
+                                </div>
+                            </div>
+                            
+                            <div class="metric-row">
+                                <div class="metric-item">
+                                    <label>平均成交量</label>
+                                    <value>${formatNumber(stockInfo.avg_volume)}</value>
+                                </div>
+                                <div class="metric-item">
+                                    <label>淨利率</label>
+                                    <value>${stockInfo.profit_margin || 'N/A'}%</value>
+                                </div>
+                                <div class="metric-item">
+                                    <label>總資產收益率</label>
+                                    <value>${stockInfo.return_on_assets || 'N/A'}%</value>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="stock-actions">
+                            <button onclick="searchStock()" class="refresh-btn">
+                                <i class="bi bi-arrow-clockwise"></i> 刷新數據
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            function formatNumber(num) {
+                if (!num) return 'N/A';
+                if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
+                if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+                if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+                if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
+                return num.toLocaleString();
+            }
+
+
+
             function editConversationTitle(conversationId, currentTitle) {
                 // 防止事件冒泡
                 event.stopPropagation();
@@ -525,6 +752,20 @@ $is_logged_in = check_login();
                     document.getElementById('question-form').dispatchEvent(new Event('submit'));
                 }
             });
+
+            // 為股票查詢輸入框添加Enter鍵支持
+            document.addEventListener('DOMContentLoaded', function() {
+                const stockInput = document.getElementById('stock-ticker-input');
+                if (stockInput) {
+                    stockInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            searchStock();
+                        }
+                    });
+                }
+            });
+
             // 初始載入
             loadConversations();
         <?php endif; ?>

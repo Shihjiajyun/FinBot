@@ -20,6 +20,32 @@ define('MAX_UPLOAD_SIZE', 50 * 1024 * 1024); // 50MB
 define('DOWNLOADS_PATH', '../downloads/');
 define('PYTHON_SCRIPT_PATH', '../');
 
+// Python配置 - 根據系統自動偵測
+function getPythonCommand()
+{
+    $python_paths = [
+        'C:\\Users\\shihj\\anaconda3\\python.exe',
+        'C:\\Python312\\python.exe',
+        'C:\\Python311\\python.exe',
+        'C:\\Python310\\python.exe',
+        'python.exe',
+        'python'
+    ];
+
+    foreach ($python_paths as $path) {
+        $test_cmd = "\"$path\" --version 2>&1";
+        $output = shell_exec($test_cmd);
+
+        if ($output !== null && strpos($output, 'Python') !== false) {
+            return $path;
+        }
+    }
+
+    return 'python'; // 預設值
+}
+
+define('PYTHON_COMMAND', getPythonCommand());
+
 // 資料庫連接類
 class Database
 {
