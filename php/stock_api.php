@@ -163,7 +163,14 @@ function getFinancialData($ticker)
                 operating_expenses,
                 income_before_tax,
                 eps_basic,
-                outstanding_shares
+                outstanding_shares,
+                current_assets,
+                total_assets,
+                current_liabilities,
+                total_liabilities,
+                long_term_debt,
+                retained_earnings_balance,
+                current_ratio
             FROM filings 
             WHERE ticker = ? 
             AND filing_type = 'ANNUAL_FINANCIAL'
@@ -179,6 +186,7 @@ function getFinancialData($ticker)
                 'years' => [],
                 'growth_rates' => [],
                 'absolute_metrics' => [],
+                'balance_sheet_data' => [],
                 'message' => '目前沒有該股票的財務數據',
                 'company_name' => null,
                 'total_years' => 0
@@ -188,6 +196,7 @@ function getFinancialData($ticker)
         $years = [];
         $growth_rates = [];
         $absolute_metrics = [];
+        $balance_sheet_data = [];
         $company_name = $raw_data[0]['company_name'];
         $total_years = count($raw_data);
 
@@ -252,16 +261,46 @@ function getFinancialData($ticker)
             ];
 
             $absolute_metrics[] = $absolute_metric;
+
+            // 計算資產負債表指標
+            $balance_sheet_metric = [
+                'year' => $year,
+                'current_assets' => $data['current_assets'],
+                'total_assets' => $data['total_assets'],
+                'current_liabilities' => $data['current_liabilities'],
+                'total_liabilities' => $data['total_liabilities'],
+                'long_term_debt' => $data['long_term_debt'],
+                'retained_earnings' => $data['retained_earnings_balance'],
+                'shareholders_equity' => $data['shareholders_equity'],
+                'current_ratio' => $data['current_ratio'],
+                // 計算比率指標
+                'book_value_per_share' => ($data['shareholders_equity'] > 0 && $data['outstanding_shares'] > 0)
+                    ? ($data['shareholders_equity'] / $data['outstanding_shares']) : null,
+                'roa' => ($data['net_income'] > 0 && $data['total_assets'] > 0)
+                    ? ($data['net_income'] / $data['total_assets'] * 100) : null,
+                'roe' => ($data['net_income'] > 0 && $data['shareholders_equity'] > 0)
+                    ? ($data['net_income'] / $data['shareholders_equity'] * 100) : null,
+                'roic' => ($data['operating_income'] > 0 && $data['total_assets'] > 0 && $data['current_liabilities'] > 0)
+                    ? ($data['operating_income'] / ($data['total_assets'] - $data['current_liabilities']) * 100) : null,
+                'debt_equity_ratio' => ($data['total_liabilities'] > 0 && $data['shareholders_equity'] > 0)
+                    ? ($data['total_liabilities'] / $data['shareholders_equity']) : null,
+                'debt_payoff_years' => ($data['total_liabilities'] > 0 && $data['operating_cash_flow'] > 0)
+                    ? ($data['total_liabilities'] / $data['operating_cash_flow']) : null
+            ];
+
+            $balance_sheet_data[] = $balance_sheet_metric;
         }
 
         // 反轉結果數組以便從新到舊顯示
         $growth_rates = array_reverse($growth_rates);
         $absolute_metrics = array_reverse($absolute_metrics);
+        $balance_sheet_data = array_reverse($balance_sheet_data);
 
         return [
             'years' => array_reverse($years),
             'growth_rates' => $growth_rates,
             'absolute_metrics' => $absolute_metrics,
+            'balance_sheet_data' => $balance_sheet_data,
             'company_name' => $company_name,
             'total_years' => $total_years
         ];
@@ -271,6 +310,7 @@ function getFinancialData($ticker)
             'years' => [],
             'growth_rates' => [],
             'absolute_metrics' => [],
+            'balance_sheet_data' => [],
             'message' => '獲取財務數據時發生錯誤',
             'company_name' => null,
             'total_years' => 0
