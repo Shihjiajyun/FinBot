@@ -1089,6 +1089,24 @@ body {
     gap: 8px;
 }
 
+.data-info {
+    background: rgba(44, 90, 160, 0.1);
+    border: 1px solid rgba(44, 90, 160, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 15px;
+    color: #c5c5d2;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.data-info i {
+    color: var(--primary-color);
+    font-size: 1em;
+}
+
 .financial-table-container {
     overflow-x: auto;
     border-radius: 8px;

@@ -634,9 +634,15 @@ $is_logged_in = check_login();
                 // 生成財務增長率表格
                 let financialTable = '';
                 if (financialData && financialData.growth_rates && financialData.growth_rates.length > 0) {
+                    // 添加數據範圍信息
+                    const dataRangeInfo = financialData.total_years > 1 ?
+                        `<p class="data-info"><i class="bi bi-info-circle"></i> 基於 ${financialData.total_years} 年財務數據計算，公司名稱: ${financialData.company_name}</p>` :
+                        '';
+
                     financialTable = `
                         <div class="financial-growth-section">
                             <h5><i class="bi bi-graph-up-arrow"></i> 歷年財務增長率分析</h5>
+                            ${dataRangeInfo}
                             <div class="financial-table-container">
                                 <table class="financial-growth-table">
                                     <thead>
@@ -677,7 +683,7 @@ $is_logged_in = check_login();
                             <h5><i class="bi bi-info-circle"></i> 財務數據</h5>
                             <div class="no-data-message">
                                 <p>${financialData?.message || '目前沒有該股票的財務增長率數據'}</p>
-                                <small>系統僅提供已分析過的股票財務數據</small>
+                                <small>系統需要至少兩年的財務數據才能計算增長率</small>
                             </div>
                         </div>
                     `;

@@ -148,22 +148,18 @@ function getFinancialData($ticker)
         $db = new Database();
         $pdo = $db->getConnection();
 
-        // 查詢該股票的財務數據，按年份排序
+        // 查詢該股票的財務數據，按年份排序（使用新的資料表結構）
         $stmt = $pdo->prepare("
             SELECT 
                 filing_year,
-                stockholders_equity_current,
-                stockholders_equity_previous,
-                net_income_year1,
-                net_income_year2,
-                operating_cash_flow_year1,
-                operating_cash_flow_year2,
-                total_revenue_year1,
-                total_revenue_year2
+                annual_revenue,
+                operating_cash_flow,
+                net_income,
+                shareholders_equity,
+                company_name
             FROM filings 
-            WHERE company_name = ? 
-            AND filing_type = '10-K'
-            AND financial_data_extracted = 1
+            WHERE ticker = ? 
+            AND filing_type = 'ANNUAL_FINANCIAL'
             ORDER BY filing_year ASC
         ");
 
@@ -181,6 +177,11 @@ function getFinancialData($ticker)
         $years = [];
         $growth_rates = [];
 
+        // 按年份排序數據
+        usort($raw_data, function ($a, $b) {
+            return $a['filing_year'] - $b['filing_year'];
+        });
+
         foreach ($raw_data as $index => $data) {
             $year = $data['filing_year'];
             $years[] = $year;
@@ -193,56 +194,66 @@ function getFinancialData($ticker)
                 'revenue_growth' => null
             ];
 
-            // 計算股東權益增長率
-            if ($data['stockholders_equity_current'] && $data['stockholders_equity_previous']) {
-                $current = floatval($data['stockholders_equity_current']);
-                $previous = floatval($data['stockholders_equity_previous']);
-                if ($previous != 0) {
-                    $growth_rate['equity_growth'] = round((($current - $previous) / $previous) * 100, 2);
-                }
-            }
+            // 如果不是第一年，計算相對於前一年的增長率
+            if ($index > 0) {
+                $previous_data = $raw_data[$index - 1];
 
-            // 計算淨收入增長率
-            if ($data['net_income_year1'] && $data['net_income_year2']) {
-                $current = floatval($data['net_income_year1']);
-                $previous = floatval($data['net_income_year2']);
-                if ($previous != 0) {
-                    $growth_rate['net_income_growth'] = round((($current - $previous) / $previous) * 100, 2);
+                // 計算股東權益增長率
+                if ($data['shareholders_equity'] && $previous_data['shareholders_equity']) {
+                    $current = floatval($data['shareholders_equity']);
+                    $previous = floatval($previous_data['shareholders_equity']);
+                    if ($previous != 0) {
+                        $growth_rate['equity_growth'] = round((($current - $previous) / $previous) * 100, 2);
+                    }
                 }
-            }
 
-            // 計算現金流增長率
-            if ($data['operating_cash_flow_year1'] && $data['operating_cash_flow_year2']) {
-                $current = floatval($data['operating_cash_flow_year1']);
-                $previous = floatval($data['operating_cash_flow_year2']);
-                if ($previous != 0) {
-                    $growth_rate['cash_flow_growth'] = round((($current - $previous) / $previous) * 100, 2);
+                // 計算淨收入增長率
+                if ($data['net_income'] !== null && $previous_data['net_income'] !== null) {
+                    $current = floatval($data['net_income']);
+                    $previous = floatval($previous_data['net_income']);
+                    if ($previous != 0) {
+                        $growth_rate['net_income_growth'] = round((($current - $previous) / $previous) * 100, 2);
+                    }
                 }
-            }
 
-            // 計算營收增長率
-            if ($data['total_revenue_year1'] && $data['total_revenue_year2']) {
-                $current = floatval($data['total_revenue_year1']);
-                $previous = floatval($data['total_revenue_year2']);
-                if ($previous != 0) {
-                    $growth_rate['revenue_growth'] = round((($current - $previous) / $previous) * 100, 2);
+                // 計算現金流增長率
+                if ($data['operating_cash_flow'] !== null && $previous_data['operating_cash_flow'] !== null) {
+                    $current = floatval($data['operating_cash_flow']);
+                    $previous = floatval($previous_data['operating_cash_flow']);
+                    if ($previous != 0) {
+                        $growth_rate['cash_flow_growth'] = round((($current - $previous) / $previous) * 100, 2);
+                    }
+                }
+
+                // 計算營收增長率
+                if ($data['annual_revenue'] !== null && $previous_data['annual_revenue'] !== null) {
+                    $current = floatval($data['annual_revenue']);
+                    $previous = floatval($previous_data['annual_revenue']);
+                    if ($previous != 0) {
+                        $growth_rate['revenue_growth'] = round((($current - $previous) / $previous) * 100, 2);
+                    }
                 }
             }
 
             $growth_rates[] = $growth_rate;
         }
 
+        // 過濾掉第一年（沒有增長率數據）
+        $filtered_growth_rates = array_slice($growth_rates, 1);
+
         return [
             'years' => $years,
-            'growth_rates' => $growth_rates,
-            'message' => count($growth_rates) > 0 ? '' : '無可用的財務增長率數據'
+            'growth_rates' => $filtered_growth_rates,
+            'total_years' => count($raw_data),
+            'company_name' => $raw_data[0]['company_name'] ?? '',
+            'message' => count($filtered_growth_rates) > 0 ? '' : '需要至少兩年的財務數據才能計算增長率'
         ];
     } catch (Exception $e) {
         error_log("獲取財務數據錯誤: " . $e->getMessage());
         return [
             'years' => [],
             'growth_rates' => [],
-            'message' => '獲取財務數據時發生錯誤'
+            'message' => '獲取財務數據時發生錯誤: ' . $e->getMessage()
         ];
     }
 }
