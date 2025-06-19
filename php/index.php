@@ -912,6 +912,54 @@ $is_logged_in = check_login();
             `;
                 }
 
+                // 生成現金流數據表格
+                let cashFlowTable = '';
+                if (financialData && financialData.cash_flow_data && financialData.cash_flow_data.length > 0) {
+                    cashFlowTable = `
+                <div class="financial-section">
+                    <h5><i class="bi bi-cash-stack"></i> 歷年現金流報表分析</h5>
+                    <div class="financial-table-container">
+                        <table class="financial-table">
+                            <thead>
+                                <tr>
+                                    <th>年份</th>
+                                    <th>淨利 (Net Income)</th>
+                                    <th>營運現金流 (Operating Cash Flow)</th>
+                                    <th>自由現金流 (Free Cash Flow)</th>
+                                    <th>投資現金流 (Cash Flow, Investing)</th>
+                                    <th>融資現金流 (Cash Flow, Financing)</th>
+                                    <th>現金及約當現金 (Cash and Cash Equivalents)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${financialData.cash_flow_data.map(data => `
+                                    <tr>
+                                        <td class="year-cell">${data.year}</td>
+                                        <td class="financial-value ${getFinancialValueClass(data.net_income, 'net_income')}">${formatFinancialValue(data.net_income)}</td>
+                                        <td class="financial-value ${getFinancialValueClass(data.operating_cash_flow, 'revenue')}">${formatFinancialValue(data.operating_cash_flow)}</td>
+                                        <td class="financial-value ${getFinancialValueClass(data.free_cash_flow, 'revenue')}">${formatFinancialValue(data.free_cash_flow)}</td>
+                                        <td class="financial-value ${getFinancialValueClass(data.cash_flow_investing, 'revenue')}">${formatFinancialValue(data.cash_flow_investing)}</td>
+                                        <td class="financial-value ${getFinancialValueClass(data.cash_flow_financing, 'revenue')}">${formatFinancialValue(data.cash_flow_financing)}</td>
+                                        <td class="financial-value ${getFinancialValueClass(data.cash_and_cash_equivalents, 'revenue')}">${formatFinancialValue(data.cash_and_cash_equivalents)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+                } else {
+                    cashFlowTable = `
+                <div class="financial-section">
+                    <h5><i class="bi bi-cash-stack"></i> 歷年現金流報表分析</h5>
+                    <div class="no-data-message">
+                        <p>目前沒有該股票的現金流數據</p>
+                        <small>系統正在努力收集更多現金流數據</small>
+                    </div>
+                </div>
+            `;
+                }
+
                 // 生成資產負債表數據表格
                 let balanceSheetTable = '';
                 if (financialData && financialData.balance_sheet_data && financialData.balance_sheet_data.length > 0) {
@@ -1046,6 +1094,7 @@ $is_logged_in = check_login();
                 ${financialTable}
                 ${absoluteMetricsTable}
                 ${balanceSheetTable}
+                ${cashFlowTable}
 
                 <div class="stock-actions">
                     <button onclick="searchStock()" class="refresh-btn">

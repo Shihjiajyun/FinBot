@@ -2,17 +2,24 @@
 // FinBot 系統配置文件
 date_default_timezone_set('Asia/Taipei');
 
-// 資料庫配置
-define('DB_HOST', '43.207.210.147');
-define('DB_NAME', 'finbot_db');
-define('DB_USER', 'myuser');
-define('DB_PASS', '123456789');
+// 環境變數支援 - 優先使用環境變數，再使用預設值
+function getEnvVar($key, $default = null)
+{
+    $value = getenv($key);
+    return $value !== false ? $value : $default;
+}
+
+// 資料庫配置 - 支援環境變數
+define('DB_HOST', getEnvVar('DB_HOST', '43.207.210.147'));
+define('DB_NAME', getEnvVar('DB_NAME', 'finbot_db'));
+define('DB_USER', getEnvVar('DB_USER', 'myuser'));
+define('DB_PASS', getEnvVar('DB_PASS', '123456789'));
 define('DB_CHARSET', 'utf8mb4');
 
-// GPT API 配置
-define('OPENAI_API_KEY', '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'); // 請替換成你的API Key
+// GPT API 配置 - 支援環境變數
+define('OPENAI_API_KEY', getEnvVar('OPENAI_API_KEY', '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'));
 define('OPENAI_API_URL', 'https://api.openai.com/v1/chat/completions');
-define('OPENAI_MODEL', 'gpt-4o');
+define('OPENAI_MODEL', getEnvVar('OPENAI_MODEL', 'gpt-4o'));
 
 // 系統設定
 define('SESSION_TIMEOUT', 7200); // 2小時
@@ -20,28 +27,61 @@ define('MAX_UPLOAD_SIZE', 50 * 1024 * 1024); // 50MB
 define('DOWNLOADS_PATH', '../downloads/');
 define('PYTHON_SCRIPT_PATH', '../');
 
-// Python配置 - 根據系統自動偵測
+// Python配置 - 跨平台自動偵測
 function getPythonCommand()
 {
-    $python_paths = [
-        'C:\\Users\\shihj\\anaconda3\\python.exe',
-        'C:\\Python312\\python.exe',
-        'C:\\Python311\\python.exe',
-        'C:\\Python310\\python.exe',
-        'python.exe',
-        'python'
-    ];
+    // 首先檢查環境變數
+    $env_python = getEnvVar('PYTHON_PATH');
+    if ($env_python && isPythonValid($env_python)) {
+        return $env_python;
+    }
+
+    // 偵測作業系統
+    $os = strtoupper(substr(PHP_OS, 0, 3));
+
+    if ($os === 'WIN') {
+        // Windows 路徑
+        $python_paths = [
+            'C:\\Users\\shihj\\anaconda3\\python.exe', // 保留開發環境路徑
+            'C:\\Python312\\python.exe',
+            'C:\\Python311\\python.exe',
+            'C:\\Python310\\python.exe',
+            'C:\\Python39\\python.exe',
+            'python.exe',
+            'python3.exe',
+            'python'
+        ];
+    } else {
+        // Linux/Unix 路徑
+        $python_paths = [
+            '/opt/bitnami/apache/htdocs/FinBot/finbot_env/bin/python3', // 虛擬環境 Python
+            '/usr/bin/python3',
+            '/usr/bin/python',
+            '/usr/local/bin/python3',
+            '/usr/local/bin/python',
+            '/opt/python3/bin/python3',
+            'python3',
+            'python'
+        ];
+    }
 
     foreach ($python_paths as $path) {
-        $test_cmd = "\"$path\" --version 2>&1";
-        $output = shell_exec($test_cmd);
-
-        if ($output !== null && strpos($output, 'Python') !== false) {
+        if (isPythonValid($path)) {
             return $path;
         }
     }
 
-    return 'python'; // 預設值
+    // 如果都找不到，返回系統預設
+    return ($os === 'WIN') ? 'python' : 'python3';
+}
+
+// 檢查Python是否有效
+function isPythonValid($python_path)
+{
+    $test_cmd = "\"$python_path\" --version 2>&1";
+    $output = shell_exec($test_cmd);
+
+    return ($output !== null && strpos($output, 'Python') !== false);
 }
 
 define('PYTHON_COMMAND', getPythonCommand());
@@ -62,7 +102,8 @@ class Database
             ];
             $this->pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
         } catch (PDOException $e) {
-            die("資料庫連接失敗: " . $e->getMessage());
+            error_log("資料庫連接失敗: " . $e->getMessage());
+            die("資料庫連接失敗，請檢查配置");
         }
     }
 

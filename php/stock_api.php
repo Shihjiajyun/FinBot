@@ -170,7 +170,11 @@ function getFinancialData($ticker)
                 total_liabilities,
                 long_term_debt,
                 retained_earnings_balance,
-                current_ratio
+                current_ratio,
+                free_cash_flow,
+                cash_flow_investing,
+                cash_flow_financing,
+                cash_and_cash_equivalents
             FROM filings 
             WHERE ticker = ? 
             AND filing_type = 'ANNUAL_FINANCIAL'
@@ -187,6 +191,7 @@ function getFinancialData($ticker)
                 'growth_rates' => [],
                 'absolute_metrics' => [],
                 'balance_sheet_data' => [],
+                'cash_flow_data' => [],
                 'message' => '目前沒有該股票的財務數據',
                 'company_name' => null,
                 'total_years' => 0
@@ -197,6 +202,7 @@ function getFinancialData($ticker)
         $growth_rates = [];
         $absolute_metrics = [];
         $balance_sheet_data = [];
+        $cash_flow_data = [];
         $company_name = $raw_data[0]['company_name'];
         $total_years = count($raw_data);
 
@@ -289,18 +295,33 @@ function getFinancialData($ticker)
             ];
 
             $balance_sheet_data[] = $balance_sheet_metric;
+
+            // 計算現金流指標
+            $cash_flow_metric = [
+                'year' => $year,
+                'net_income' => $data['net_income'],
+                'operating_cash_flow' => $data['operating_cash_flow'],
+                'free_cash_flow' => $data['free_cash_flow'],
+                'cash_flow_investing' => $data['cash_flow_investing'],
+                'cash_flow_financing' => $data['cash_flow_financing'],
+                'cash_and_cash_equivalents' => $data['cash_and_cash_equivalents']
+            ];
+
+            $cash_flow_data[] = $cash_flow_metric;
         }
 
         // 反轉結果數組以便從新到舊顯示
         $growth_rates = array_reverse($growth_rates);
         $absolute_metrics = array_reverse($absolute_metrics);
         $balance_sheet_data = array_reverse($balance_sheet_data);
+        $cash_flow_data = array_reverse($cash_flow_data);
 
         return [
             'years' => array_reverse($years),
             'growth_rates' => $growth_rates,
             'absolute_metrics' => $absolute_metrics,
             'balance_sheet_data' => $balance_sheet_data,
+            'cash_flow_data' => $cash_flow_data,
             'company_name' => $company_name,
             'total_years' => $total_years
         ];
@@ -311,6 +332,7 @@ function getFinancialData($ticker)
             'growth_rates' => [],
             'absolute_metrics' => [],
             'balance_sheet_data' => [],
+            'cash_flow_data' => [],
             'message' => '獲取財務數據時發生錯誤',
             'company_name' => null,
             'total_years' => 0

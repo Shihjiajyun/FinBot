@@ -165,30 +165,11 @@ class DualSourceAnalyzer:
                 macro_outstanding_shares = macrotrends_data.get('outstanding_shares')
                 macro_cogs = macrotrends_data.get('cogs')
                 
-                # 新增現金流指標（從字典中直接提取該年度的數值）
-                macro_free_cash_flow = None
-                if 'free_cash_flow' in macrotrends_data and macrotrends_data['free_cash_flow'] is not None:
-                    cash_flow_dict = macrotrends_data['free_cash_flow']
-                    if isinstance(cash_flow_dict, dict) and year in cash_flow_dict:
-                        macro_free_cash_flow = cash_flow_dict[year]
-                
-                macro_cash_flow_investing = None
-                if 'cash_flow_investing' in macrotrends_data and macrotrends_data['cash_flow_investing'] is not None:
-                    cash_flow_dict = macrotrends_data['cash_flow_investing']
-                    if isinstance(cash_flow_dict, dict) and year in cash_flow_dict:
-                        macro_cash_flow_investing = cash_flow_dict[year]
-                
-                macro_cash_flow_financing = None
-                if 'cash_flow_financing' in macrotrends_data and macrotrends_data['cash_flow_financing'] is not None:
-                    cash_flow_dict = macrotrends_data['cash_flow_financing']
-                    if isinstance(cash_flow_dict, dict) and year in cash_flow_dict:
-                        macro_cash_flow_financing = cash_flow_dict[year]
-                
-                macro_cash_and_cash_equivalents = None
-                if 'cash_and_cash_equivalents' in macrotrends_data and macrotrends_data['cash_and_cash_equivalents'] is not None:
-                    cash_flow_dict = macrotrends_data['cash_and_cash_equivalents']
-                    if isinstance(cash_flow_dict, dict) and year in cash_flow_dict:
-                        macro_cash_and_cash_equivalents = cash_flow_dict[year]
+                # 新增現金流指標（直接從organize_data_by_year處理好的數據中提取）
+                macro_free_cash_flow = macrotrends_data.get('free_cash_flow')
+                macro_cash_flow_investing = macrotrends_data.get('cash_flow_investing')
+                macro_cash_flow_financing = macrotrends_data.get('cash_flow_financing')
+                macro_cash_and_cash_equivalents = macrotrends_data.get('cash_and_cash_equivalents')
                 
                 # =============== 新增：资产负债表指标 ===============
                 macro_total_assets = macrotrends_data.get('total_assets')
@@ -549,17 +530,19 @@ class DualSourceAnalyzer:
 
         for metric_name, metric_url in cash_flow_metrics.items():
             print(f"    🔍 抓取 {metric_name}...")
-            cash_flow_data = self.fetch_macrotrends_cashflow_table(ticker, metric_url)
-            if cash_flow_data:
+            # 使用 test.py 中成功的 URL 格式：alphabet 而不是 company_name_slug
+            url = f"https://www.macrotrends.net/stocks/charts/{ticker}/alphabet/{metric_url}"
+            df = self.fetch_macrotrends_table_simple(ticker, metric_url, metric_name)
+            if df is not None:
                 # 根據指標類型存儲到對應的鍵中
                 if metric_name == "Free Cash Flow":
-                    macrotrends_data['free_cash_flow'] = cash_flow_data
+                    macrotrends_data['free_cash_flow'] = df
                 elif metric_name == "Cash Flow from Investing":
-                    macrotrends_data['cash_flow_investing'] = cash_flow_data
+                    macrotrends_data['cash_flow_investing'] = df
                 elif metric_name == "Cash Flow from Financing":
-                    macrotrends_data['cash_flow_financing'] = cash_flow_data
+                    macrotrends_data['cash_flow_financing'] = df
                 elif metric_name == "Cash and Cash Equivalents":
-                    macrotrends_data['cash_and_cash_equivalents'] = cash_flow_data
+                    macrotrends_data['cash_and_cash_equivalents'] = df
                 
                 print(f"      ✅ {metric_name} 數據獲取成功")
             else:
@@ -572,6 +555,55 @@ class DualSourceAnalyzer:
         
         return macrotrends_data
     
+    def fetch_macrotrends_table_simple(self, ticker, page_slug, metric_name, max_years=10):
+        """基於 test.py 成功經驗的簡化數據抓取方法"""
+        url = f"https://www.macrotrends.net/stocks/charts/{ticker}/alphabet/{page_slug}"
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+        
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            table = soup.find("table", class_="historical_data_table")
+            if not table:
+                print(f"      ❌ 找不到 historical_data_table 表格: {url}")
+                return None
+                
+            rows = table.find_all("tr")
+            
+            data = {}
+            for row in rows[1:]:
+                cols = row.find_all("td")
+                if len(cols) >= 2:
+                    year = cols[0].text.strip()
+                    value = cols[1].text.strip().replace("$", "").replace(",", "").replace("B", "")
+                    try:
+                        if year.isdigit():
+                            data[int(year)] = float(value) * 1000  # 十億 → 百萬
+                    except:
+                        continue
+            
+            if not data:
+                print(f"      ❌ 沒有解析到有效數據: {url}")
+                return None
+                
+            # 僅保留最近 N 年資料，轉換為 DataFrame 格式
+            recent_data = {year: data[year] for year in sorted(data.keys(), reverse=True)[:max_years]}
+            
+            # 轉換為 DataFrame 格式（與其他方法保持一致）
+            df_data = []
+            for year, value in recent_data.items():
+                df_data.append([year, value])
+            
+            df = pd.DataFrame(df_data, columns=["Year", f"{metric_name} (M USD)"])
+            return df
+            
+        except Exception as e:
+            print(f"      ❌ 抓取 {metric_name} 時發生錯誤: {e}")
+            return None
+
     def fetch_free_cash_flow_macrotrends(self, ticker, company_slug):
         """從 Macrotrends 抓取自由現金流數據（推薦方法）"""
         try:
@@ -1401,43 +1433,6 @@ class DualSourceAnalyzer:
         final_data = self.create_comprehensive_report(comparison_results, ticker, company_name)
         
         return comparison_results, final_data
-    
-    def fetch_macrotrends_cashflow_table(self, ticker, page_slug, max_years=10):
-        """基於 test.py 的成功邏輯抓取現金流數據"""
-        url = f"https://www.macrotrends.net/stocks/charts/{ticker}/alphabet/{page_slug}"
-        headers = {
-            "User-Agent": "Mozilla/5.0"
-        }
-        
-        try:
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, "html.parser")
-            
-            table = soup.find("table", class_="historical_data_table")
-            if not table:
-                return None
-                
-            rows = table.find_all("tr")
-
-            data = {}
-            for row in rows[1:]:
-                cols = row.find_all("td")
-                if len(cols) >= 2:
-                    year = cols[0].text.strip()
-                    value = cols[1].text.strip().replace("$", "").replace(",", "").replace("B", "")
-                    try:
-                        if year.isdigit():
-                            data[int(year)] = float(value) * 1000  # 十億 → 百萬
-                    except:
-                        continue
-
-            # 僅保留最近 N 年資料
-            return {year: data[year] for year in sorted(data.keys(), reverse=True)[:max_years]}
-            
-        except Exception as e:
-            print(f"    ❌ 抓取失敗: {e}")
-            return None
 
 def main():
     """主程序"""
