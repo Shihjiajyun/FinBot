@@ -165,6 +165,31 @@ class DualSourceAnalyzer:
                 macro_outstanding_shares = macrotrends_data.get('outstanding_shares')
                 macro_cogs = macrotrends_data.get('cogs')
                 
+                # 新增現金流指標（從字典中直接提取該年度的數值）
+                macro_free_cash_flow = None
+                if 'free_cash_flow' in macrotrends_data and macrotrends_data['free_cash_flow'] is not None:
+                    cash_flow_dict = macrotrends_data['free_cash_flow']
+                    if isinstance(cash_flow_dict, dict) and year in cash_flow_dict:
+                        macro_free_cash_flow = cash_flow_dict[year]
+                
+                macro_cash_flow_investing = None
+                if 'cash_flow_investing' in macrotrends_data and macrotrends_data['cash_flow_investing'] is not None:
+                    cash_flow_dict = macrotrends_data['cash_flow_investing']
+                    if isinstance(cash_flow_dict, dict) and year in cash_flow_dict:
+                        macro_cash_flow_investing = cash_flow_dict[year]
+                
+                macro_cash_flow_financing = None
+                if 'cash_flow_financing' in macrotrends_data and macrotrends_data['cash_flow_financing'] is not None:
+                    cash_flow_dict = macrotrends_data['cash_flow_financing']
+                    if isinstance(cash_flow_dict, dict) and year in cash_flow_dict:
+                        macro_cash_flow_financing = cash_flow_dict[year]
+                
+                macro_cash_and_cash_equivalents = None
+                if 'cash_and_cash_equivalents' in macrotrends_data and macrotrends_data['cash_and_cash_equivalents'] is not None:
+                    cash_flow_dict = macrotrends_data['cash_and_cash_equivalents']
+                    if isinstance(cash_flow_dict, dict) and year in cash_flow_dict:
+                        macro_cash_and_cash_equivalents = cash_flow_dict[year]
+                
                 # =============== 新增：资产负债表指标 ===============
                 macro_total_assets = macrotrends_data.get('total_assets')
                 macro_total_liabilities = macrotrends_data.get('total_liabilities')
@@ -204,12 +229,18 @@ class DualSourceAnalyzer:
                 elif yahoo_current_ratio is not None:
                     final_current_ratio = yahoo_current_ratio  # 备用：使用Yahoo计算的比率
                 
+                # =============== 选择最佳现金流数据 ===============
+                final_free_cash_flow = macro_free_cash_flow if macro_free_cash_flow is not None else None
+                final_cash_flow_investing = macro_cash_flow_investing if macro_cash_flow_investing is not None else None
+                final_cash_flow_financing = macro_cash_flow_financing if macro_cash_flow_financing is not None else None
+                final_cash_and_cash_equivalents = macro_cash_and_cash_equivalents if macro_cash_and_cash_equivalents is not None else None
+                
                 # 檢查是否有足夠的基礎數據才存入資料庫
                 if final_revenue is None and final_income is None:
                     print(f"  ⚠️  {year} 年度數據不足，跳過存儲")
                     continue
                 
-                # 更新SQL语句，添加新的资产负债表字段
+                # 更新SQL语句，添加新的资产负债表字段和现金流字段
                 sql = """
                 INSERT INTO filings (
                     ticker, company_name, filing_year, filing_type,
@@ -219,13 +250,15 @@ class DualSourceAnalyzer:
                     eps_basic, outstanding_shares, cogs,
                     operating_cash_flow, shareholders_equity,
                     total_assets, total_liabilities, long_term_debt, retained_earnings_balance,
-                    current_assets, current_liabilities, current_ratio
+                    current_assets, current_liabilities, current_ratio,
+                    free_cash_flow, cash_flow_investing, cash_flow_financing, cash_and_cash_equivalents
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s,
                     %s, %s,
                     %s, %s, %s, %s,
-                    %s, %s, %s
+                    %s, %s, %s,
+                    %s, %s, %s, %s
                 ) ON DUPLICATE KEY UPDATE
                     company_name = VALUES(company_name),
                     revenue = VALUES(revenue),
@@ -249,6 +282,10 @@ class DualSourceAnalyzer:
                     current_assets = VALUES(current_assets),
                     current_liabilities = VALUES(current_liabilities),
                     current_ratio = VALUES(current_ratio),
+                    free_cash_flow = VALUES(free_cash_flow),
+                    cash_flow_investing = VALUES(cash_flow_investing),
+                    cash_flow_financing = VALUES(cash_flow_financing),
+                    cash_and_cash_equivalents = VALUES(cash_and_cash_equivalents),
                     last_updated = NOW()
                 """
                 
@@ -260,7 +297,8 @@ class DualSourceAnalyzer:
                     macro_income_before_tax, macro_eps_basic, macro_outstanding_shares, macro_cogs,
                     final_cash_flow, final_equity,
                     final_total_assets, final_total_liabilities, final_long_term_debt, final_retained_earnings_balance,
-                    final_current_assets, final_current_liabilities, final_current_ratio
+                    final_current_assets, final_current_liabilities, final_current_ratio,
+                    final_free_cash_flow, final_cash_flow_investing, final_cash_flow_financing, final_cash_and_cash_equivalents
                 )
                 
                 cursor.execute(sql, values)
@@ -282,6 +320,11 @@ class DualSourceAnalyzer:
                 if final_current_assets: data_summary.append(f"流動資產: {final_current_assets:,.0f}M")
                 if final_current_liabilities: data_summary.append(f"流動負債: {final_current_liabilities:,.0f}M")
                 if final_current_ratio: data_summary.append(f"流動比率: {final_current_ratio:.2f}")
+                # 新增：现金流指标显示
+                if final_free_cash_flow: data_summary.append(f"自由現金流: {final_free_cash_flow:,.0f}M")
+                if final_cash_flow_investing: data_summary.append(f"投資現金流: {final_cash_flow_investing:,.0f}M")
+                if final_cash_flow_financing: data_summary.append(f"融資現金流: {final_cash_flow_financing:,.0f}M")
+                if final_cash_and_cash_equivalents: data_summary.append(f"現金及約當現金: {final_cash_and_cash_equivalents:,.0f}M")
                 
                 print(f"  ✅ {year} 年度數據已存入: {', '.join(data_summary)} (品質: {quality_flag})")
             
@@ -494,6 +537,37 @@ class DualSourceAnalyzer:
             time.sleep(1)  # 防止請求過快
         
         print("  ✅ 资产负债表指标抓取完成")
+        
+        # =============== 新增：现金流指标（基于 test.py 的成功经验）===============
+        print("  💰 抓取现金流指标...")
+        cash_flow_metrics = {
+            "Free Cash Flow": "free-cash-flow",
+            "Cash Flow from Investing": "cash-flow-from-investing-activities", 
+            "Cash Flow from Financing": "cash-flow-from-financial-activities",
+            "Cash and Cash Equivalents": "cash-on-hand"
+        }
+
+        for metric_name, metric_url in cash_flow_metrics.items():
+            print(f"    🔍 抓取 {metric_name}...")
+            cash_flow_data = self.fetch_macrotrends_cashflow_table(ticker, metric_url)
+            if cash_flow_data:
+                # 根據指標類型存儲到對應的鍵中
+                if metric_name == "Free Cash Flow":
+                    macrotrends_data['free_cash_flow'] = cash_flow_data
+                elif metric_name == "Cash Flow from Investing":
+                    macrotrends_data['cash_flow_investing'] = cash_flow_data
+                elif metric_name == "Cash Flow from Financing":
+                    macrotrends_data['cash_flow_financing'] = cash_flow_data
+                elif metric_name == "Cash and Cash Equivalents":
+                    macrotrends_data['cash_and_cash_equivalents'] = cash_flow_data
+                
+                print(f"      ✅ {metric_name} 數據獲取成功")
+            else:
+                print(f"      ❌ {metric_name} 數據獲取失敗")
+            
+            time.sleep(1)  # 防止請求過快
+        
+        print("  ✅ 现金流指标抓取完成")
         # ==================================================================================
         
         return macrotrends_data
@@ -1206,6 +1280,15 @@ class DualSourceAnalyzer:
                                     year_data[year]['macrotrends']['long_term_debt'] = value
                                 elif data_key == 'retained_earnings_balance':
                                     year_data[year]['macrotrends']['retained_earnings_balance'] = value
+                                # 新增：现金流指标
+                                elif data_key == 'free_cash_flow':
+                                    year_data[year]['macrotrends']['free_cash_flow'] = value
+                                elif data_key == 'cash_flow_investing':
+                                    year_data[year]['macrotrends']['cash_flow_investing'] = value
+                                elif data_key == 'cash_flow_financing':
+                                    year_data[year]['macrotrends']['cash_flow_financing'] = value
+                                elif data_key == 'cash_and_cash_equivalents':
+                                    year_data[year]['macrotrends']['cash_and_cash_equivalents'] = value
                             except (ValueError, TypeError, IndexError):
                                 continue
             
@@ -1318,6 +1401,43 @@ class DualSourceAnalyzer:
         final_data = self.create_comprehensive_report(comparison_results, ticker, company_name)
         
         return comparison_results, final_data
+    
+    def fetch_macrotrends_cashflow_table(self, ticker, page_slug, max_years=10):
+        """基於 test.py 的成功邏輯抓取現金流數據"""
+        url = f"https://www.macrotrends.net/stocks/charts/{ticker}/alphabet/{page_slug}"
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+        
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            table = soup.find("table", class_="historical_data_table")
+            if not table:
+                return None
+                
+            rows = table.find_all("tr")
+
+            data = {}
+            for row in rows[1:]:
+                cols = row.find_all("td")
+                if len(cols) >= 2:
+                    year = cols[0].text.strip()
+                    value = cols[1].text.strip().replace("$", "").replace(",", "").replace("B", "")
+                    try:
+                        if year.isdigit():
+                            data[int(year)] = float(value) * 1000  # 十億 → 百萬
+                    except:
+                        continue
+
+            # 僅保留最近 N 年資料
+            return {year: data[year] for year in sorted(data.keys(), reverse=True)[:max_years]}
+            
+        except Exception as e:
+            print(f"    ❌ 抓取失敗: {e}")
+            return None
 
 def main():
     """主程序"""
