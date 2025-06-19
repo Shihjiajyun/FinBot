@@ -242,6 +242,120 @@ $is_logged_in = check_login();
                 typographer: true
             });
 
+            // 格式化數字（通用）
+            function formatNumber(num) {
+                if (!num) return 'N/A';
+                if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
+                if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+                if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+                if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
+                return num.toLocaleString();
+            }
+
+            // 格式化增長率
+            function formatGrowthRate(rate) {
+                if (rate === null || rate === undefined || rate === '') {
+                    return '<span class="na-value">N/A</span>';
+                }
+                const numRate = parseFloat(rate);
+                if (isNaN(numRate)) {
+                    return '<span class="na-value">N/A</span>';
+                }
+                const sign = numRate >= 0 ? '+' : '';
+                return `${sign}${numRate.toFixed(2)}%`;
+            }
+
+            // 獲取增長率的CSS類別
+            function getGrowthClass(rate) {
+                if (rate === null || rate === undefined || rate === '') {
+                    return 'neutral';
+                }
+                const numRate = parseFloat(rate);
+                if (isNaN(numRate)) {
+                    return 'neutral';
+                }
+                if (numRate > 10) return 'very-positive';
+                if (numRate > 0) return 'positive';
+                if (numRate > -10) return 'slightly-negative';
+                return 'negative';
+            }
+
+            // 格式化財務數值（百萬美元）
+            function formatFinancialValue(value) {
+                if (value === null || value === undefined || value === '') return '<span class="na-value">N/A</span>';
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) return '<span class="na-value">N/A</span>';
+                return `$${formatNumber(numValue)}M`;
+            }
+
+            // 格式化每股盈餘
+            function formatEPS(value) {
+                if (value === null || value === undefined || value === '') return '<span class="na-value">N/A</span>';
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) return '<span class="na-value">N/A</span>';
+                return `$${numValue.toFixed(2)}`;
+            }
+
+            // 格式化股數（百萬股）
+            function formatShares(value) {
+                if (value === null || value === undefined || value === '') return '<span class="na-value">N/A</span>';
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) return '<span class="na-value">N/A</span>';
+                return `${formatNumber(numValue)}M`;
+            }
+
+            // 格式化比率
+            function formatRatio(value) {
+                if (value === null || value === undefined || value === '') return '<span class="na-value">N/A</span>';
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) return '<span class="na-value">N/A</span>';
+                return `${numValue.toFixed(2)}%`;
+            }
+
+            // 獲取利潤率的CSS類別
+            function getMarginClass(value) {
+                if (value === null || value === undefined || value === '') return 'neutral';
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) return 'neutral';
+                if (numValue > 20) return 'very-positive';
+                if (numValue > 10) return 'positive';
+                if (numValue > 0) return 'slightly-positive';
+                return 'negative';
+            }
+
+            // 獲取財務數值的CSS類別（基於數值大小）
+            function getFinancialValueClass(value, type = 'revenue') {
+                if (value === null || value === undefined || value === '') return 'neutral';
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) return 'neutral';
+
+                // 根據不同類型設定不同的閾值
+                switch (type) {
+                    case 'revenue':
+                    case 'gross_profit':
+                    case 'operating_income':
+                    case 'net_income':
+                        if (numValue > 100000) return 'very-positive'; // 超過1000億
+                        if (numValue > 50000) return 'positive'; // 超過500億
+                        if (numValue > 10000) return 'slightly-positive'; // 超過100億
+                        if (numValue > 0) return 'neutral';
+                        return 'negative';
+                    case 'eps':
+                        if (numValue > 10) return 'very-positive';
+                        if (numValue > 5) return 'positive';
+                        if (numValue > 2) return 'slightly-positive';
+                        if (numValue > 0) return 'neutral';
+                        return 'negative';
+                    case 'shares':
+                        if (numValue < 1000) return 'very-positive'; // 股數少通常更好
+                        if (numValue < 5000) return 'positive';
+                        if (numValue < 10000) return 'slightly-positive';
+                        return 'neutral';
+                    default:
+                        return 'neutral';
+                }
+            }
+
             // 自動調整輸入框高度
             const input = document.getElementById('question-input');
             input.addEventListener('input', function() {
@@ -640,129 +754,207 @@ $is_logged_in = check_login();
                         '';
 
                     financialTable = `
-                        <div class="financial-growth-section">
-                            <h5><i class="bi bi-graph-up-arrow"></i> 歷年財務增長率分析</h5>
-                            ${dataRangeInfo}
-                            <div class="financial-table-container">
-                                <table class="financial-growth-table">
-                                    <thead>
-                                        <tr>
-                                            <th>年份</th>
-                                            <th>股東權益增長率 (%)</th>
-                                            <th>淨收入增長率 (%)</th>
-                                            <th>現金流增長率 (%)</th>
-                                            <th>營收增長率 (%)</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${financialData.growth_rates.map(rate => `
-                                            <tr>
-                                                <td class="year-cell">${rate.year}</td>
-                                                <td class="growth-cell ${getGrowthClass(rate.equity_growth)}">
-                                                    ${formatGrowthRate(rate.equity_growth)}
-                                                </td>
-                                                <td class="growth-cell ${getGrowthClass(rate.net_income_growth)}">
-                                                    ${formatGrowthRate(rate.net_income_growth)}
-                                                </td>
-                                                <td class="growth-cell ${getGrowthClass(rate.cash_flow_growth)}">
-                                                    ${formatGrowthRate(rate.cash_flow_growth)}
-                                                </td>
-                                                <td class="growth-cell ${getGrowthClass(rate.revenue_growth)}">
-                                                    ${formatGrowthRate(rate.revenue_growth)}
-                                                </td>
-                                            </tr>
-                                        `).join('')}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    `;
+                <div class="financial-section">
+                    <h5><i class="bi bi-graph-up-arrow"></i> 歷年財務增長率分析</h5>
+                    ${dataRangeInfo}
+                    <div class="financial-table-container">
+                        <table class="financial-table">
+                            <thead>
+                                <tr>
+                                    <th>年份</th>
+                                    <th>股東權益成長率 (%)</th>
+                                    <th>淨利成長率 (%)</th>
+                                    <th>現金流成長率 (%)</th>
+                                    <th>營收成長率 (%)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${financialData.growth_rates.map(rate => `
+                                    <tr>
+                                        <td class="year-cell">${rate.year}</td>
+                                        <td class="growth-cell ${getGrowthClass(rate.equity_growth)}">
+                                            ${formatGrowthRate(rate.equity_growth)}
+                                        </td>
+                                        <td class="growth-cell ${getGrowthClass(rate.net_income_growth)}">
+                                            ${formatGrowthRate(rate.net_income_growth)}
+                                        </td>
+                                        <td class="growth-cell ${getGrowthClass(rate.cash_flow_growth)}">
+                                            ${formatGrowthRate(rate.cash_flow_growth)}
+                                        </td>
+                                        <td class="growth-cell ${getGrowthClass(rate.revenue_growth)}">
+                                            ${formatGrowthRate(rate.revenue_growth)}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
                 } else {
                     financialTable = `
-                        <div class="financial-growth-section">
-                            <h5><i class="bi bi-info-circle"></i> 財務數據</h5>
-                            <div class="no-data-message">
-                                <p>${financialData?.message || '目前沒有該股票的財務增長率數據'}</p>
-                                <small>系統需要至少兩年的財務數據才能計算增長率</small>
-                            </div>
+                <div class="financial-section">
+                    <h5><i class="bi bi-info-circle"></i> 財務增長率</h5>
+                    <div class="no-data-message">
+                        <p>${financialData?.message || '目前沒有該股票的財務增長率數據'}</p>
+                        <small>系統需要至少兩年的財務數據才能計算增長率</small>
+                    </div>
+                </div>
+            `;
+                }
+
+                // 生成財務絕對數值表格
+                let absoluteMetricsTable = '';
+                if (financialData && financialData.absolute_metrics && financialData.absolute_metrics.length > 0) {
+                    absoluteMetricsTable = `
+                <div class="financial-section">
+                    <h5><i class="bi bi-clipboard-data"></i> 財務絕對數值指標</h5>
+                    <div class="financial-table-container">
+                        <table class="financial-table">
+                            <thead>
+                                <tr>
+                                    <th>年份</th>
+                                    <th>營收</th>
+                                    <th>銷貨成本</th>
+                                    <th>毛利</th>
+                                    <th>營業收入</th>
+                                    <th>營業費用</th>
+                                    <th>稅前收入</th>
+                                    <th>淨利</th>
+                                    <th>每股盈餘</th>
+                                    <th>流通股數</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${financialData.absolute_metrics.map(metric => `
+                                    <tr>
+                                        <td class="year-cell">${metric.year}</td>
+                                        <td class="financial-value ${getFinancialValueClass(metric.revenue, 'revenue')}">${formatFinancialValue(metric.revenue)}</td>
+                                        <td class="financial-value ${getFinancialValueClass(metric.cogs, 'revenue')}">${formatFinancialValue(metric.cogs)}</td>
+                                        <td class="financial-value ${getFinancialValueClass(metric.gross_profit, 'gross_profit')}">${formatFinancialValue(metric.gross_profit)}</td>
+                                        <td class="financial-value ${getFinancialValueClass(metric.operating_income, 'operating_income')}">${formatFinancialValue(metric.operating_income)}</td>
+                                        <td class="financial-value ${getFinancialValueClass(metric.operating_expenses, 'revenue')}">${formatFinancialValue(metric.operating_expenses)}</td>
+                                        <td class="financial-value ${getFinancialValueClass(metric.income_before_tax, 'revenue')}">${formatFinancialValue(metric.income_before_tax)}</td>
+                                        <td class="financial-value ${getFinancialValueClass(metric.net_income, 'net_income')}">${formatFinancialValue(metric.net_income)}</td>
+                                        <td class="financial-value ${getFinancialValueClass(metric.eps_basic, 'eps')}">${formatEPS(metric.eps_basic)}</td>
+                                        <td class="financial-value ${getFinancialValueClass(metric.outstanding_shares, 'shares')}">${formatShares(metric.outstanding_shares)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="financial-section mt-4">
+                        <h5><i class="bi bi-percent"></i> 財務比率分析</h5>
+                        <div class="financial-table-container">
+                            <table class="financial-table">
+                                <thead>
+                                    <tr>
+                                        <th>年份</th>
+                                        <th>淨利率 (%)</th>
+                                        <th>毛利率 (%)</th>
+                                        <th>營業利潤率 (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${financialData.absolute_metrics.map(metric => `
+                                        <tr>
+                                            <td class="year-cell">${metric.year}</td>
+                                            <td class="ratio-cell ${getMarginClass(metric.net_income_margin)}">
+                                                ${formatRatio(metric.net_income_margin)}
+                                            </td>
+                                            <td class="ratio-cell ${getMarginClass(metric.gross_margin)}">
+                                                ${formatRatio(metric.gross_margin)}
+                                            </td>
+                                            <td class="ratio-cell ${getMarginClass(metric.operating_margin)}">
+                                                ${formatRatio(metric.operating_margin)}
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
                         </div>
-                    `;
+                    </div>
+                </div>
+            `;
                 }
 
                 resultArea.innerHTML = `
-                    <div class="stock-info-card">
-                        <div class="stock-header">
-                            <div class="stock-title">
-                                <h3>${stockInfo.symbol}</h3>
-                                <h4>${stockInfo.company_name || '公司名稱'}</h4>
-                                <span class="exchange-badge">${stockInfo.exchange || 'N/A'}</span>
-                            </div>
-                            <div class="stock-price">
-                                <div class="current-price">$${stockInfo.current_price || 'N/A'}</div>
-                                <div class="price-change ${stockInfo.price_change >= 0 ? 'positive' : 'negative'}">
-                                    ${stockInfo.price_change >= 0 ? '+' : ''}${stockInfo.price_change || 'N/A'} (${stockInfo.price_change_percent || 'N/A'}%)
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="stock-metrics">
-                            <div class="metric-row">
-                                <div class="metric-item">
-                                    <label>市值</label>
-                                    <value>${formatNumber(stockInfo.market_cap)} USD</value>
-                                </div>
-                                <div class="metric-item">
-                                    <label>本益比 (PE)</label>
-                                    <value>${stockInfo.pe_ratio || 'N/A'}</value>
-                                </div>
-                                <div class="metric-item">
-                                    <label>每股盈餘 (EPS)</label>
-                                    <value>${stockInfo.eps || 'N/A'}</value>
-                                </div>
-                            </div>
-                            
-                            <div class="metric-row">
-                                <div class="metric-item">
-                                    <label>股息殖利率</label>
-                                    <value>${stockInfo.dividend_yield || 'N/A'}%</value>
-                                </div>
-                                <div class="metric-item">
-                                    <label>52週高點</label>
-                                    <value>$${stockInfo.week_52_high || 'N/A'}</value>
-                                </div>
-                                <div class="metric-item">
-                                    <label>52週低點</label>
-                                    <value>$${stockInfo.week_52_low || 'N/A'}</value>
-                                </div>
-                            </div>
-                            
-                            <div class="metric-row">
-                                <div class="metric-item">
-                                    <label>平均成交量</label>
-                                    <value>${formatNumber(stockInfo.avg_volume)}</value>
-                                </div>
-                                <div class="metric-item">
-                                    <label>淨利率</label>
-                                    <value>${stockInfo.profit_margin || 'N/A'}%</value>
-                                </div>
-                                <div class="metric-item">
-                                    <label>總資產收益率</label>
-                                    <value>${stockInfo.return_on_assets || 'N/A'}%</value>
-                                </div>
-                            </div>
-                        </div>
-
-                        ${financialTable}
-
-                        <div class="stock-actions">
-                            <button onclick="searchStock()" class="refresh-btn">
-                                <i class="bi bi-arrow-clockwise"></i> 刷新數據
-                            </button>
+            <div class="stock-info-card">
+                <div class="stock-header">
+                    <div class="stock-title">
+                        <h3>${stockInfo.symbol}</h3>
+                        <h4>${stockInfo.company_name || '公司名稱'}</h4>
+                        <span class="exchange-badge">${stockInfo.exchange || 'N/A'}</span>
+                    </div>
+                    <div class="stock-price">
+                        <div class="current-price">$${stockInfo.current_price || 'N/A'}</div>
+                        <div class="price-change ${stockInfo.price_change >= 0 ? 'positive' : 'negative'}">
+                            ${stockInfo.price_change >= 0 ? '+' : ''}${stockInfo.price_change || 'N/A'} (${stockInfo.price_change_percent || 'N/A'}%)
                         </div>
                     </div>
-                `;
+                </div>
+
+                <div class="stock-metrics">
+                    <div class="metric-row">
+                        <div class="metric-item">
+                            <label>市值</label>
+                            <value>${formatNumber(stockInfo.market_cap)} USD</value>
+                        </div>
+                        <div class="metric-item">
+                            <label>本益比 (PE)</label>
+                            <value>${stockInfo.pe_ratio || 'N/A'}</value>
+                        </div>
+                        <div class="metric-item">
+                            <label>每股盈餘 (EPS)</label>
+                            <value>${stockInfo.eps || 'N/A'}</value>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-row">
+                        <div class="metric-item">
+                            <label>股息殖利率</label>
+                            <value>${stockInfo.dividend_yield || 'N/A'}%</value>
+                        </div>
+                        <div class="metric-item">
+                            <label>52週高點</label>
+                            <value>$${stockInfo.week_52_high || 'N/A'}</value>
+                        </div>
+                        <div class="metric-item">
+                            <label>52週低點</label>
+                            <value>$${stockInfo.week_52_low || 'N/A'}</value>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-row">
+                        <div class="metric-item">
+                            <label>平均成交量</label>
+                            <value>${formatNumber(stockInfo.avg_volume)}</value>
+                        </div>
+                        <div class="metric-item">
+                            <label>淨利率</label>
+                            <value>${stockInfo.profit_margin || 'N/A'}%</value>
+                        </div>
+                        <div class="metric-item">
+                            <label>總資產收益率</label>
+                            <value>${stockInfo.return_on_assets || 'N/A'}%</value>
+                        </div>
+                    </div>
+                </div>
+
+                ${financialTable}
+                ${absoluteMetricsTable}
+
+                <div class="stock-actions">
+                    <button onclick="searchStock()" class="refresh-btn">
+                        <i class="bi bi-arrow-clockwise"></i> 刷新數據
+                    </button>
+                </div>
+            </div>
+        `;
             }
 
+            // 格式化數字（通用）
             function formatNumber(num) {
                 if (!num) return 'N/A';
                 if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
@@ -772,21 +964,74 @@ $is_logged_in = check_login();
                 return num.toLocaleString();
             }
 
+            // 格式化增長率
             function formatGrowthRate(rate) {
-                if (rate === null || rate === undefined) {
+                if (rate === null || rate === undefined || rate === '') {
                     return '<span class="na-value">N/A</span>';
                 }
-                const sign = rate >= 0 ? '+' : '';
-                return `${sign}${rate.toFixed(2)}%`;
+                const numRate = parseFloat(rate);
+                if (isNaN(numRate)) {
+                    return '<span class="na-value">N/A</span>';
+                }
+                const sign = numRate >= 0 ? '+' : '';
+                return `${sign}${numRate.toFixed(2)}%`;
             }
 
+            // 獲取增長率的CSS類別
             function getGrowthClass(rate) {
-                if (rate === null || rate === undefined) {
+                if (rate === null || rate === undefined || rate === '') {
                     return 'neutral';
                 }
-                if (rate > 10) return 'very-positive';
-                if (rate > 0) return 'positive';
-                if (rate > -10) return 'slightly-negative';
+                const numRate = parseFloat(rate);
+                if (isNaN(numRate)) {
+                    return 'neutral';
+                }
+                if (numRate > 10) return 'very-positive';
+                if (numRate > 0) return 'positive';
+                if (numRate > -10) return 'slightly-negative';
+                return 'negative';
+            }
+
+            // 格式化財務數值（百萬美元）
+            function formatFinancialValue(value) {
+                if (value === null || value === undefined || value === '') return '<span class="na-value">N/A</span>';
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) return '<span class="na-value">N/A</span>';
+                return `$${formatNumber(numValue)}M`;
+            }
+
+            // 格式化每股盈餘
+            function formatEPS(value) {
+                if (value === null || value === undefined || value === '') return '<span class="na-value">N/A</span>';
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) return '<span class="na-value">N/A</span>';
+                return `$${numValue.toFixed(2)}`;
+            }
+
+            // 格式化股數（百萬股）
+            function formatShares(value) {
+                if (value === null || value === undefined || value === '') return '<span class="na-value">N/A</span>';
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) return '<span class="na-value">N/A</span>';
+                return `${formatNumber(numValue)}M`;
+            }
+
+            // 格式化比率
+            function formatRatio(value) {
+                if (value === null || value === undefined || value === '') return '<span class="na-value">N/A</span>';
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) return '<span class="na-value">N/A</span>';
+                return `${numValue.toFixed(2)}%`;
+            }
+
+            // 獲取利潤率的CSS類別
+            function getMarginClass(value) {
+                if (value === null || value === undefined || value === '') return 'neutral';
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) return 'neutral';
+                if (numValue > 20) return 'very-positive';
+                if (numValue > 10) return 'positive';
+                if (numValue > 0) return 'slightly-positive';
                 return 'negative';
             }
 

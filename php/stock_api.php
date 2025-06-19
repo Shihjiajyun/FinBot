@@ -148,19 +148,27 @@ function getFinancialData($ticker)
         $db = new Database();
         $pdo = $db->getConnection();
 
-        // 查詢該股票的財務數據，按年份排序（使用新的資料表結構）
+        // 查詢該股票的財務數據，按年份排序（增加查詢筆數）
         $stmt = $pdo->prepare("
             SELECT 
                 filing_year,
-                annual_revenue,
+                revenue,
                 operating_cash_flow,
                 net_income,
                 shareholders_equity,
-                company_name
+                company_name,
+                cogs,
+                gross_profit,
+                operating_income,
+                operating_expenses,
+                income_before_tax,
+                eps_basic,
+                outstanding_shares
             FROM filings 
             WHERE ticker = ? 
             AND filing_type = 'ANNUAL_FINANCIAL'
-            ORDER BY filing_year ASC
+            ORDER BY filing_year DESC
+            LIMIT 10
         ");
 
         $stmt->execute([$ticker]);
@@ -170,22 +178,27 @@ function getFinancialData($ticker)
             return [
                 'years' => [],
                 'growth_rates' => [],
-                'message' => '目前沒有該股票的財務數據'
+                'absolute_metrics' => [],
+                'message' => '目前沒有該股票的財務數據',
+                'company_name' => null,
+                'total_years' => 0
             ];
         }
 
         $years = [];
         $growth_rates = [];
+        $absolute_metrics = [];
+        $company_name = $raw_data[0]['company_name'];
+        $total_years = count($raw_data);
 
-        // 按年份排序數據
-        usort($raw_data, function ($a, $b) {
-            return $a['filing_year'] - $b['filing_year'];
-        });
+        // 反轉數據以便從舊到新計算增長率
+        $raw_data = array_reverse($raw_data);
 
         foreach ($raw_data as $index => $data) {
             $year = $data['filing_year'];
             $years[] = $year;
 
+            // 計算增長率
             $growth_rate = [
                 'year' => $year,
                 'equity_growth' => null,
@@ -196,64 +209,71 @@ function getFinancialData($ticker)
 
             // 如果不是第一年，計算相對於前一年的增長率
             if ($index > 0) {
-                $previous_data = $raw_data[$index - 1];
+                $prev_data = $raw_data[$index - 1];
 
-                // 計算股東權益增長率
-                if ($data['shareholders_equity'] && $previous_data['shareholders_equity']) {
-                    $current = floatval($data['shareholders_equity']);
-                    $previous = floatval($previous_data['shareholders_equity']);
-                    if ($previous != 0) {
-                        $growth_rate['equity_growth'] = round((($current - $previous) / $previous) * 100, 2);
-                    }
+                // 股東權益成長率
+                if ($prev_data['shareholders_equity'] > 0) {
+                    $growth_rate['equity_growth'] = (($data['shareholders_equity'] - $prev_data['shareholders_equity']) / $prev_data['shareholders_equity']) * 100;
                 }
 
-                // 計算淨收入增長率
-                if ($data['net_income'] !== null && $previous_data['net_income'] !== null) {
-                    $current = floatval($data['net_income']);
-                    $previous = floatval($previous_data['net_income']);
-                    if ($previous != 0) {
-                        $growth_rate['net_income_growth'] = round((($current - $previous) / $previous) * 100, 2);
-                    }
+                // 淨利成長率
+                if ($prev_data['net_income'] > 0) {
+                    $growth_rate['net_income_growth'] = (($data['net_income'] - $prev_data['net_income']) / $prev_data['net_income']) * 100;
                 }
 
-                // 計算現金流增長率
-                if ($data['operating_cash_flow'] !== null && $previous_data['operating_cash_flow'] !== null) {
-                    $current = floatval($data['operating_cash_flow']);
-                    $previous = floatval($previous_data['operating_cash_flow']);
-                    if ($previous != 0) {
-                        $growth_rate['cash_flow_growth'] = round((($current - $previous) / $previous) * 100, 2);
-                    }
+                // 現金流成長率
+                if ($prev_data['operating_cash_flow'] > 0) {
+                    $growth_rate['cash_flow_growth'] = (($data['operating_cash_flow'] - $prev_data['operating_cash_flow']) / $prev_data['operating_cash_flow']) * 100;
                 }
 
-                // 計算營收增長率
-                if ($data['annual_revenue'] !== null && $previous_data['annual_revenue'] !== null) {
-                    $current = floatval($data['annual_revenue']);
-                    $previous = floatval($previous_data['annual_revenue']);
-                    if ($previous != 0) {
-                        $growth_rate['revenue_growth'] = round((($current - $previous) / $previous) * 100, 2);
-                    }
+                // 營收成長率
+                if ($prev_data['revenue'] > 0) {
+                    $growth_rate['revenue_growth'] = (($data['revenue'] - $prev_data['revenue']) / $prev_data['revenue']) * 100;
                 }
             }
 
             $growth_rates[] = $growth_rate;
+
+            // 計算絕對數值指標和比率
+            $absolute_metric = [
+                'year' => $year,
+                'revenue' => $data['revenue'],
+                'cogs' => $data['cogs'],
+                'gross_profit' => $data['gross_profit'],
+                'operating_income' => $data['operating_income'],
+                'operating_expenses' => $data['operating_expenses'],
+                'income_before_tax' => $data['income_before_tax'],
+                'net_income' => $data['net_income'],
+                'eps_basic' => $data['eps_basic'],
+                'outstanding_shares' => $data['outstanding_shares'],
+                'net_income_margin' => $data['revenue'] > 0 ? ($data['net_income'] / $data['revenue'] * 100) : null,
+                'gross_margin' => $data['revenue'] > 0 ? ($data['gross_profit'] / $data['revenue'] * 100) : null,
+                'operating_margin' => $data['revenue'] > 0 ? ($data['operating_income'] / $data['revenue'] * 100) : null
+            ];
+
+            $absolute_metrics[] = $absolute_metric;
         }
 
-        // 過濾掉第一年（沒有增長率數據）
-        $filtered_growth_rates = array_slice($growth_rates, 1);
+        // 反轉結果數組以便從新到舊顯示
+        $growth_rates = array_reverse($growth_rates);
+        $absolute_metrics = array_reverse($absolute_metrics);
 
         return [
-            'years' => $years,
-            'growth_rates' => $filtered_growth_rates,
-            'total_years' => count($raw_data),
-            'company_name' => $raw_data[0]['company_name'] ?? '',
-            'message' => count($filtered_growth_rates) > 0 ? '' : '需要至少兩年的財務數據才能計算增長率'
+            'years' => array_reverse($years),
+            'growth_rates' => $growth_rates,
+            'absolute_metrics' => $absolute_metrics,
+            'company_name' => $company_name,
+            'total_years' => $total_years
         ];
     } catch (Exception $e) {
         error_log("獲取財務數據錯誤: " . $e->getMessage());
         return [
             'years' => [],
             'growth_rates' => [],
-            'message' => '獲取財務數據時發生錯誤: ' . $e->getMessage()
+            'absolute_metrics' => [],
+            'message' => '獲取財務數據時發生錯誤',
+            'company_name' => null,
+            'total_years' => 0
         ];
     }
 }

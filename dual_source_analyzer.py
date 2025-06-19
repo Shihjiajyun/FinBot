@@ -156,6 +156,15 @@ class DualSourceAnalyzer:
                 yahoo_cash_flow = yahoo_data.get('cash_flow')
                 yahoo_equity = yahoo_data.get('equity')
                 
+                # 新增核心財務指標
+                macro_gross_profit = macrotrends_data.get('gross_profit')
+                macro_operating_expenses = macrotrends_data.get('operating_expenses')
+                macro_operating_income = macrotrends_data.get('operating_income')
+                macro_income_before_tax = macrotrends_data.get('income_before_tax')
+                macro_eps_basic = macrotrends_data.get('eps_basic')
+                macro_outstanding_shares = macrotrends_data.get('outstanding_shares')
+                macro_cogs = macrotrends_data.get('cogs')
+                
                 # 計算差異百分比
                 revenue_variance = self.calculate_variance(macro_revenue, yahoo_revenue)
                 income_variance = self.calculate_variance(macro_income, yahoo_income)
@@ -171,30 +180,45 @@ class DualSourceAnalyzer:
                     print(f"  ⚠️  {year} 年度數據不足，跳過存儲")
                     continue
                 
-                # 插入或更新數據 (簡潔版資料表結構)
+                # 修正：移除不存在的資料庫欄位 operating_cash_flow 和 shareholders_equity
                 sql = """
                 INSERT INTO filings (
                     ticker, company_name, filing_year, filing_type,
-                    annual_revenue, net_income, operating_cash_flow, shareholders_equity,
-                    data_source, data_quality_score, data_quality_flag
+                    revenue, net_income,
+                    data_source, data_quality_score, data_quality_flag,
+                    gross_profit, operating_expenses, operating_income, income_before_tax,
+                    eps_basic, outstanding_shares, cogs,
+                    operating_cash_flow, shareholders_equity
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s
                 ) ON DUPLICATE KEY UPDATE
                     company_name = VALUES(company_name),
-                    annual_revenue = VALUES(annual_revenue),
+                    revenue = VALUES(revenue),
                     net_income = VALUES(net_income),
-                    operating_cash_flow = VALUES(operating_cash_flow),
-                    shareholders_equity = VALUES(shareholders_equity),
                     data_source = VALUES(data_source),
                     data_quality_score = VALUES(data_quality_score),
                     data_quality_flag = VALUES(data_quality_flag),
+                    gross_profit = VALUES(gross_profit),
+                    operating_expenses = VALUES(operating_expenses),
+                    operating_income = VALUES(operating_income),
+                    income_before_tax = VALUES(income_before_tax),
+                    eps_basic = VALUES(eps_basic),
+                    outstanding_shares = VALUES(outstanding_shares),
+                    cogs = VALUES(cogs),
+                    operating_cash_flow = VALUES(operating_cash_flow),
+                    shareholders_equity = VALUES(shareholders_equity),
                     last_updated = NOW()
                 """
                 
                 values = (
                     ticker, company_name, year, 'ANNUAL_FINANCIAL',
-                    final_revenue, final_income, final_cash_flow, final_equity,
-                    'dual_source', quality_score, quality_flag
+                    final_revenue, final_income,
+                    'dual_source', quality_score, quality_flag,
+                    macro_gross_profit, macro_operating_expenses, macro_operating_income,
+                    macro_income_before_tax, macro_eps_basic, macro_outstanding_shares, macro_cogs,
+                    final_cash_flow, final_equity
                 )
                 
                 cursor.execute(sql, values)
@@ -206,6 +230,9 @@ class DualSourceAnalyzer:
                 if final_income: data_summary.append(f"淨利: {final_income:,.0f}M")
                 if final_cash_flow: data_summary.append(f"現金流: {final_cash_flow:,.0f}M")
                 if final_equity: data_summary.append(f"權益: {final_equity:,.0f}M")
+                if macro_gross_profit: data_summary.append(f"毛利: {macro_gross_profit:,.0f}M")
+                if macro_operating_income: data_summary.append(f"營業利益: {macro_operating_income:,.0f}M")
+                if macro_eps_basic: data_summary.append(f"EPS: ${macro_eps_basic:.2f}")
                 
                 print(f"  ✅ {year} 年度數據已存入: {', '.join(data_summary)} (品質: {quality_flag})")
             
@@ -225,23 +252,59 @@ class DualSourceAnalyzer:
     # ============= MACROTRENDS 數據抓取 =============
     
     def get_macrotrends_table(self, url, title_keyword):
-        """從 macrotrends.net 抓取指定表格數據"""
+        """從 macrotrends.net 抓取指定表格數據（改進版，基於 test.py 的成功邏輯）"""
         try:
             print(f"    🔍 Macrotrends: {url}")
             res = requests.get(url, headers=self.headers, timeout=10)
             res.raise_for_status()
             soup = BeautifulSoup(res.text, 'html.parser')
 
-            tables = soup.find_all("table", class_="historical_data_table table")
+            # 使用與 test.py 相同的表格查找邏輯
+            tables = soup.find_all("table", class_="historical_data_table")
             
-            for table in tables:
-                if title_keyword.lower() in table.text.lower():
-                    df = pd.read_html(str(table))[0]
-                    df.columns = [col.strip() for col in df.columns]
-                    df = df.dropna()
-                    return df
+            if not tables:
+                print(f"    ❌ 找不到 historical_data_table 表格")
+                return None
+                
+            # 通常第一個表格就是我們要的主數據表
+            table = tables[0]
+            rows = table.find_all("tr")
             
-            return None
+            if len(rows) < 2:  # 至少要有標題行和一行數據
+                print(f"    ❌ 表格行數不足")
+                return None
+            
+            # 手動解析表格數據（更可靠）
+            data = []
+            for row in rows[1:]:  # 跳過標題行
+                cols = row.find_all("td")
+                if len(cols) >= 2:
+                    year_text = cols[0].text.strip()
+                    value_text = cols[1].text.strip().replace("$", "").replace(",", "").replace("B", "")
+                    
+                    try:
+                        # 提取年份
+                        year_match = re.search(r'(\d{4})', year_text)
+                        if year_match:
+                            year = int(year_match.group(1))
+                            value = float(value_text)
+                            
+                            # 只保留近15年的數據
+                            if 2010 <= year <= 2024:
+                                data.append((year, value))
+                    except (ValueError, TypeError):
+                        continue
+            
+            if not data:
+                print(f"    ❌ 沒有解析到有效數據")
+                return None
+            
+            # 轉換為 DataFrame
+            df = pd.DataFrame(data, columns=["Year", title_keyword])
+            df = df.sort_values('Year', ascending=False)  # 按年份降序排列
+            
+            print(f"    ✅ 成功解析 {len(df)} 年的 {title_keyword} 數據")
+            return df
             
         except Exception as e:
             print(f"    ❌ Macrotrends 錯誤: {e}")
@@ -253,36 +316,77 @@ class DualSourceAnalyzer:
         
         company_name_slug = company_name.lower().replace(' ', '-').replace('.', '').replace(',', '')
         macrotrends_data = {}
-        
-        # 營收
-        print("  💰 抓取營收數據...")
-        revenue_url = f'https://www.macrotrends.net/stocks/charts/{ticker}/{company_name_slug}/revenue'
-        revenue_df = self.get_macrotrends_table(revenue_url, "Annual Revenue")
-        if revenue_df is not None and len(revenue_df.columns) >= 2:
-            revenue_df.columns = ['Year', 'Revenue (M USD)']
-            revenue_df['Revenue (M USD)'] = revenue_df['Revenue (M USD)'].replace(r'[\$,]', '', regex=True)
-            revenue_df['Revenue (M USD)'] = pd.to_numeric(revenue_df['Revenue (M USD)'], errors='coerce')
-            macrotrends_data['revenue'] = revenue_df
-            print("    ✅ 營收數據獲取成功")
-        else:
-            print("    ❌ 營收數據獲取失敗")
-        
-        time.sleep(1)
-        
-        # 淨利
-        print("  💵 抓取淨利數據...")
-        income_url = f'https://www.macrotrends.net/stocks/charts/{ticker}/{company_name_slug}/net-income'
-        income_df = self.get_macrotrends_table(income_url, "Annual Net Income")
-        if income_df is not None and len(income_df.columns) >= 2:
-            income_df.columns = ['Year', 'Net Income (M USD)']
-            income_df['Net Income (M USD)'] = income_df['Net Income (M USD)'].replace(r'[\$,]', '', regex=True)
-            income_df['Net Income (M USD)'] = pd.to_numeric(income_df['Net Income (M USD)'], errors='coerce')
-            macrotrends_data['income'] = income_df
-            print("    ✅ 淨利數據獲取成功")
-        else:
-            print("    ❌ 淨利數據獲取失敗")
-        
-        time.sleep(1)
+
+        # 核心財務指標（修正版 - 基於 test.py 的成功經驗）
+        print("  💼 抓取核心財務指標...")
+        metrics = {
+            "Revenue": "revenue",
+            "Gross Profit": "gross-profit",
+            "Operating Expenses": "operating-expenses",
+            "Operating Income": "operating-income",
+            "Income Before Taxes": "pre-tax-income",  # 修正：使用 test.py 中成功的 URL
+            "Net Income": "net-income",
+            "EPS Basic": "eps-earnings-per-share-diluted",   # 修正：使用 test.py 中成功的 URL
+            "Outstanding Shares": "shares-outstanding"
+        }
+
+        for metric_name, metric_url in metrics.items():
+            print(f"    🔍 抓取 {metric_name}...")
+            url = f"https://www.macrotrends.net/stocks/charts/{ticker}/{company_name_slug}/{metric_url}"
+            df = self.get_macrotrends_table(url, metric_name)
+            if df is not None:
+                # 將數據標準化為百萬美元單位
+                if metric_name == "EPS Basic":
+                    # EPS 保持原單位（美元/股）
+                    df[f"{metric_name} (USD)"] = df[metric_name]
+                elif metric_name == "Outstanding Shares":
+                    # 股數轉換為百萬股
+                    df[f"{metric_name} (M)"] = df[metric_name]
+                else:
+                    # 其他財務數據轉換為百萬美元
+                    df[f"{metric_name} (M USD)"] = df[metric_name]
+                
+                # 根據指標類型存儲到對應的鍵中
+                if metric_name == "Revenue":
+                    macrotrends_data['revenue'] = df[['Year', f"{metric_name} (M USD)"]]
+                elif metric_name == "Net Income":
+                    macrotrends_data['income'] = df[['Year', f"{metric_name} (M USD)"]]
+                elif metric_name == "Gross Profit":
+                    macrotrends_data['gross_profit'] = df[['Year', f"{metric_name} (M USD)"]]
+                elif metric_name == "Operating Expenses":
+                    macrotrends_data['operating_expenses'] = df[['Year', f"{metric_name} (M USD)"]]
+                elif metric_name == "Operating Income":
+                    macrotrends_data['operating_income'] = df[['Year', f"{metric_name} (M USD)"]]
+                elif metric_name == "Income Before Taxes":
+                    macrotrends_data['income_before_tax'] = df[['Year', f"{metric_name} (M USD)"]]
+                elif metric_name == "EPS Basic":
+                    macrotrends_data['eps_basic'] = df[['Year', f"{metric_name} (USD)"]]
+                elif metric_name == "Outstanding Shares":
+                    macrotrends_data['outstanding_shares'] = df[['Year', f"{metric_name} (M)"]]
+                
+                print(f"      ✅ {metric_name} 數據獲取成功")
+            else:
+                print(f"      ❌ {metric_name} 數據獲取失敗")
+            
+            time.sleep(1)  # 防止請求過快
+
+        # 計算銷貨成本 (COGS)
+        if 'revenue' in macrotrends_data and 'gross_profit' in macrotrends_data:
+            revenue_df = macrotrends_data['revenue']
+            gross_profit_df = macrotrends_data['gross_profit']
+            
+            if len(revenue_df.columns) >= 2 and len(gross_profit_df.columns) >= 2:
+                revenue_col = revenue_df.columns[1]  # 第二列是數值
+                gross_profit_col = gross_profit_df.columns[1]  # 第二列是數值
+                
+                # 合併數據並計算 COGS
+                merged_df = pd.merge(revenue_df, gross_profit_df, on='Year', how='inner')
+                if not merged_df.empty:
+                    cogs_df = pd.DataFrame()
+                    cogs_df['Year'] = merged_df['Year']
+                    cogs_df['COGS (M USD)'] = merged_df[revenue_col] - merged_df[gross_profit_col]
+                    macrotrends_data['cogs'] = cogs_df
+                    print("    ✅ 銷貨成本(COGS)計算成功")
         
         # 自由現金流 - 使用新的抓取方法
         print("  💳 抓取自由現金流數據...")
@@ -316,30 +420,52 @@ class DualSourceAnalyzer:
             res.raise_for_status()
             soup = BeautifulSoup(res.text, 'html.parser')
             
-            tables = soup.find_all("table", class_="historical_data_table table")
+            # 使用與新方法一致的表格查找邏輯
+            tables = soup.find_all("table", class_="historical_data_table")
             
-            for table in tables:
-                if "Free Cash Flow" in table.text:
-                    df = pd.read_html(str(table))[0]
-                    df.columns = ['Year', 'Free Cash Flow (M USD)']
-                    df = df.dropna()
-                    
-                    # 清理年份數據
-                    df['Year'] = df['Year'].astype(str).str.extract(r'(\d{4})')[0]
-                    df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
-                    
-                    # 清理現金流數據
-                    df['Free Cash Flow (M USD)'] = df['Free Cash Flow (M USD)'].replace(r'[\$,]', '', regex=True)
-                    df['Free Cash Flow (M USD)'] = pd.to_numeric(df['Free Cash Flow (M USD)'], errors='coerce')
-                    
-                    result_df = df.dropna()
-                    if not result_df.empty:
-                        # 重新命名為標準格式
-                        result_df = result_df.rename(columns={'Free Cash Flow (M USD)': 'Operating Cash Flow (M USD)'})
-                        return result_df
+            if not tables:
+                print("    ❌ 找不到 historical_data_table 表格")
+                return None
+                
+            # 通常第一個表格就是我們要的主數據表
+            table = tables[0]
+            rows = table.find_all("tr")
             
-            print("    ❌ 找不到包含 'Free Cash Flow' 的表格")
-            return None
+            if len(rows) < 2:  # 至少要有標題行和一行數據
+                print("    ❌ 表格行數不足")
+                return None
+            
+            # 手動解析表格數據（更可靠）
+            data = []
+            for row in rows[1:]:  # 跳過標題行
+                cols = row.find_all("td")
+                if len(cols) >= 2:
+                    year_text = cols[0].text.strip()
+                    value_text = cols[1].text.strip().replace("$", "").replace(",", "").replace("B", "")
+                    
+                    try:
+                        # 提取年份
+                        year_match = re.search(r'(\d{4})', year_text)
+                        if year_match:
+                            year = int(year_match.group(1))
+                            value = float(value_text)
+                            
+                            # 只保留近15年的數據
+                            if 2010 <= year <= 2024:
+                                data.append((year, value))
+                    except (ValueError, TypeError):
+                        continue
+            
+            if not data:
+                print("    ❌ 沒有解析到有效的現金流數據")
+                return None
+            
+            # 轉換為 DataFrame
+            df = pd.DataFrame(data, columns=["Year", "Operating Cash Flow (M USD)"])
+            df = df.sort_values('Year', ascending=False)  # 按年份降序排列
+            
+            print(f"    ✅ 成功解析 {len(df)} 年的現金流數據")
+            return df
             
         except Exception as e:
             print(f"    ❌ Macrotrends 自由現金流錯誤: {e}")
@@ -764,7 +890,7 @@ class DualSourceAnalyzer:
             print(f"❌ 保存失敗：{e}")
     
     def organize_data_by_year(self, macrotrends_data, yahoo_data):
-        """將數據按年份組織"""
+        """將數據按年份組織（改進版 - 動態處理欄位名稱）"""
         year_data = {}
         current_year = datetime.now().year
         target_years = list(range(current_year - 9, current_year + 1))  # 近十年
@@ -777,49 +903,67 @@ class DualSourceAnalyzer:
                 'yahoo': {}
             }
             
-            # 處理 Macrotrends 數據
-            if 'revenue' in macrotrends_data:
-                revenue_row = macrotrends_data['revenue'][macrotrends_data['revenue']['Year'] == year]
-                if not revenue_row.empty:
-                    year_data[year]['macrotrends']['revenue'] = float(revenue_row.iloc[0]['Revenue (M USD)'])
+            # 處理 Macrotrends 數據（動態處理欄位名稱）
+            for data_key, df in macrotrends_data.items():
+                if df is not None and not df.empty and 'Year' in df.columns:
+                    year_row = df[df['Year'] == year]
+                    if not year_row.empty:
+                        # 取得數值欄位（不是 Year 的欄位）
+                        value_cols = [col for col in df.columns if col != 'Year']
+                        if value_cols:
+                            value_col = value_cols[0]  # 通常只有一個數值欄位
+                            try:
+                                value = float(year_row.iloc[0][value_col])
+                                
+                                # 映射到標準化的鍵名
+                                if data_key == 'revenue':
+                                    year_data[year]['macrotrends']['revenue'] = value
+                                elif data_key == 'income':
+                                    year_data[year]['macrotrends']['income'] = value
+                                elif data_key == 'cash_flow':
+                                    year_data[year]['macrotrends']['cash_flow'] = value
+                                elif data_key == 'equity':
+                                    year_data[year]['macrotrends']['equity'] = value
+                                elif data_key == 'gross_profit':
+                                    year_data[year]['macrotrends']['gross_profit'] = value
+                                elif data_key == 'operating_expenses':
+                                    year_data[year]['macrotrends']['operating_expenses'] = value
+                                elif data_key == 'operating_income':
+                                    year_data[year]['macrotrends']['operating_income'] = value
+                                elif data_key == 'income_before_tax':
+                                    year_data[year]['macrotrends']['income_before_tax'] = value
+                                elif data_key == 'eps_basic':
+                                    year_data[year]['macrotrends']['eps_basic'] = value
+                                elif data_key == 'outstanding_shares':
+                                    year_data[year]['macrotrends']['outstanding_shares'] = value
+                                elif data_key == 'cogs':
+                                    year_data[year]['macrotrends']['cogs'] = value
+                            except (ValueError, TypeError, IndexError):
+                                continue
             
-            if 'income' in macrotrends_data:
-                income_row = macrotrends_data['income'][macrotrends_data['income']['Year'] == year]
-                if not income_row.empty:
-                    year_data[year]['macrotrends']['income'] = float(income_row.iloc[0]['Net Income (M USD)'])
-            
-            # 新增：Macrotrends 營運現金流
-            if 'cash_flow' in macrotrends_data:
-                cf_row = macrotrends_data['cash_flow'][macrotrends_data['cash_flow']['Year'] == year]
-                if not cf_row.empty:
-                    year_data[year]['macrotrends']['cash_flow'] = float(cf_row.iloc[0]['Operating Cash Flow (M USD)'])
-            
-            # 新增：Macrotrends 股東權益
-            if 'equity' in macrotrends_data:
-                equity_row = macrotrends_data['equity'][macrotrends_data['equity']['Year'] == year]
-                if not equity_row.empty:
-                    year_data[year]['macrotrends']['equity'] = float(equity_row.iloc[0]['Shareholders Equity (M USD)'])
-            
-            # 處理 Yahoo Finance 數據
-            if 'revenue' in yahoo_data:
-                revenue_row = yahoo_data['revenue'][yahoo_data['revenue']['Year'] == year]
-                if not revenue_row.empty:
-                    year_data[year]['yahoo']['revenue'] = float(revenue_row.iloc[0]['Revenue (M USD)'])
-            
-            if 'income' in yahoo_data:
-                income_row = yahoo_data['income'][yahoo_data['income']['Year'] == year]
-                if not income_row.empty:
-                    year_data[year]['yahoo']['income'] = float(income_row.iloc[0]['Net Income (M USD)'])
-            
-            if 'cash_flow' in yahoo_data:
-                cf_row = yahoo_data['cash_flow'][yahoo_data['cash_flow']['Year'] == year]
-                if not cf_row.empty:
-                    year_data[year]['yahoo']['cash_flow'] = float(cf_row.iloc[0]['Operating Cash Flow (M USD)'])
-            
-            if 'equity' in yahoo_data:
-                equity_row = yahoo_data['equity'][yahoo_data['equity']['Year'] == year]
-                if not equity_row.empty:
-                    year_data[year]['yahoo']['equity'] = float(equity_row.iloc[0]['Shareholders Equity (M USD)'])
+            # 處理 Yahoo Finance 數據（動態處理欄位名稱）
+            for data_key, df in yahoo_data.items():
+                if df is not None and not df.empty and 'Year' in df.columns:
+                    year_row = df[df['Year'] == year]
+                    if not year_row.empty:
+                        # 取得數值欄位（不是 Year 的欄位）
+                        value_cols = [col for col in df.columns if col != 'Year']
+                        if value_cols:
+                            value_col = value_cols[0]  # 通常只有一個數值欄位
+                            try:
+                                value = float(year_row.iloc[0][value_col])
+                                
+                                # 映射到標準化的鍵名
+                                if data_key == 'revenue':
+                                    year_data[year]['yahoo']['revenue'] = value
+                                elif data_key == 'income':
+                                    year_data[year]['yahoo']['income'] = value
+                                elif data_key == 'cash_flow':
+                                    year_data[year]['yahoo']['cash_flow'] = value
+                                elif data_key == 'equity':
+                                    year_data[year]['yahoo']['equity'] = value
+                            except (ValueError, TypeError, IndexError):
+                                continue
         
         return year_data
     
