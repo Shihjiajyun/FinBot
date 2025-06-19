@@ -1069,3 +1069,214 @@ body {
         font-size: 13px;
     }
 }
+
+/* 財務增長率表格樣式 */
+.financial-growth-section {
+    margin-top: 25px;
+    padding: 20px;
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    border-radius: 12px;
+    border: 1px solid var(--dark-border);
+}
+
+.financial-growth-section h5 {
+    color: white;
+    margin-bottom: 18px;
+    font-size: 1.2rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.financial-table-container {
+    overflow-x: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.financial-growth-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--dark-sidebar);
+    font-size: 14px;
+    border: 1px solid var(--dark-border);
+}
+
+.financial-growth-table thead {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #0056b3 100%);
+    color: white;
+}
+
+.financial-growth-table th {
+    padding: 15px 12px;
+    text-align: center;
+    font-weight: 600;
+    border-bottom: 2px solid var(--dark-border);
+    font-size: 13px;
+    white-space: nowrap;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.financial-growth-table th:last-child {
+    border-right: none;
+}
+
+.financial-growth-table td {
+    padding: 12px;
+    text-align: center;
+    border-bottom: 1px solid var(--dark-border);
+    border-right: 1px solid var(--dark-border);
+    transition: all 0.2s ease;
+    color: white;
+}
+
+.financial-growth-table td:last-child {
+    border-right: none;
+}
+
+.financial-growth-table tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    transform: scale(1.002);
+    transition: all 0.2s ease;
+}
+
+.year-cell {
+    font-weight: 600;
+    background: var(--dark-bg) !important;
+    color: white;
+    border-right: 2px solid var(--primary-color) !important;
+}
+
+.growth-cell {
+    font-weight: 500;
+    font-size: 13px;
+}
+
+/* 增長率顏色樣式 */
+.growth-cell.very-positive {
+    background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+    color: white;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.growth-cell.positive {
+    background: linear-gradient(135deg, #16a085 0%, #1abc9c 100%);
+    color: white;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.growth-cell.slightly-negative {
+    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+    color: white;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.growth-cell.negative {
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    color: white;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.growth-cell.neutral {
+    background: var(--dark-bg);
+    color: #8e8ea0;
+    font-style: italic;
+}
+
+.na-value {
+    color: #8e8ea0;
+    font-style: italic;
+    font-size: 12px;
+}
+
+/* 無數據提示樣式 */
+.no-data-message {
+    text-align: center;
+    padding: 30px 20px;
+    color: #8e8ea0;
+    background: var(--dark-bg);
+    border-radius: 8px;
+    border: 1px dashed var(--dark-border);
+}
+
+.no-data-message p {
+    margin-bottom: 8px;
+    font-size: 16px;
+    color: white;
+}
+
+.no-data-message small {
+    color: #8e8ea0;
+    font-size: 13px;
+}
+
+/* 響應式設計 - 財務表格 */
+@media (max-width: 768px) {
+    .financial-growth-section {
+        margin-top: 20px;
+        padding: 15px;
+    }
+
+    .financial-table-container {
+        overflow-x: scroll;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .financial-growth-table {
+        min-width: 600px;
+        font-size: 12px;
+    }
+
+    .financial-growth-table th {
+        padding: 10px 8px;
+        font-size: 11px;
+    }
+
+    .financial-growth-table td {
+        padding: 8px 6px;
+        font-size: 11px;
+    }
+
+    .financial-growth-section h5 {
+        font-size: 1.1rem;
+        margin-bottom: 15px;
+    }
+
+    .no-data-message {
+        padding: 20px 15px;
+    }
+
+    .no-data-message p {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .financial-growth-table {
+        min-width: 500px;
+        font-size: 11px;
+    }
+
+    .financial-growth-table th {
+        padding: 8px 6px;
+        font-size: 10px;
+    }
+
+    .financial-growth-table td {
+        padding: 6px 4px;
+        font-size: 10px;
+    }
+
+    .financial-growth-section {
+        padding: 12px;
+    }
+
+    .financial-growth-section h5 {
+        font-size: 1rem;
+    }
+}

@@ -598,7 +598,7 @@ $is_logged_in = check_login();
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            displayStockInfo(data.stock_info);
+                            displayStockInfo(data.stock_info, data.financial_data);
                         } else {
                             resultArea.innerHTML = `
                             <div class="stock-error">
@@ -628,8 +628,61 @@ $is_logged_in = check_login();
                 searchStock();
             }
 
-            function displayStockInfo(stockInfo) {
+            function displayStockInfo(stockInfo, financialData) {
                 const resultArea = document.getElementById('stock-result-area');
+
+                // 生成財務增長率表格
+                let financialTable = '';
+                if (financialData && financialData.growth_rates && financialData.growth_rates.length > 0) {
+                    financialTable = `
+                        <div class="financial-growth-section">
+                            <h5><i class="bi bi-graph-up-arrow"></i> 歷年財務增長率分析</h5>
+                            <div class="financial-table-container">
+                                <table class="financial-growth-table">
+                                    <thead>
+                                        <tr>
+                                            <th>年份</th>
+                                            <th>股東權益增長率 (%)</th>
+                                            <th>淨收入增長率 (%)</th>
+                                            <th>現金流增長率 (%)</th>
+                                            <th>營收增長率 (%)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${financialData.growth_rates.map(rate => `
+                                            <tr>
+                                                <td class="year-cell">${rate.year}</td>
+                                                <td class="growth-cell ${getGrowthClass(rate.equity_growth)}">
+                                                    ${formatGrowthRate(rate.equity_growth)}
+                                                </td>
+                                                <td class="growth-cell ${getGrowthClass(rate.net_income_growth)}">
+                                                    ${formatGrowthRate(rate.net_income_growth)}
+                                                </td>
+                                                <td class="growth-cell ${getGrowthClass(rate.cash_flow_growth)}">
+                                                    ${formatGrowthRate(rate.cash_flow_growth)}
+                                                </td>
+                                                <td class="growth-cell ${getGrowthClass(rate.revenue_growth)}">
+                                                    ${formatGrowthRate(rate.revenue_growth)}
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    financialTable = `
+                        <div class="financial-growth-section">
+                            <h5><i class="bi bi-info-circle"></i> 財務數據</h5>
+                            <div class="no-data-message">
+                                <p>${financialData?.message || '目前沒有該股票的財務增長率數據'}</p>
+                                <small>系統僅提供已分析過的股票財務數據</small>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 resultArea.innerHTML = `
                     <div class="stock-info-card">
                         <div class="stock-header">
@@ -693,6 +746,8 @@ $is_logged_in = check_login();
                             </div>
                         </div>
 
+                        ${financialTable}
+
                         <div class="stock-actions">
                             <button onclick="searchStock()" class="refresh-btn">
                                 <i class="bi bi-arrow-clockwise"></i> 刷新數據
@@ -711,7 +766,23 @@ $is_logged_in = check_login();
                 return num.toLocaleString();
             }
 
+            function formatGrowthRate(rate) {
+                if (rate === null || rate === undefined) {
+                    return '<span class="na-value">N/A</span>';
+                }
+                const sign = rate >= 0 ? '+' : '';
+                return `${sign}${rate.toFixed(2)}%`;
+            }
 
+            function getGrowthClass(rate) {
+                if (rate === null || rate === undefined) {
+                    return 'neutral';
+                }
+                if (rate > 10) return 'very-positive';
+                if (rate > 0) return 'positive';
+                if (rate > -10) return 'slightly-negative';
+                return 'negative';
+            }
 
             function editConversationTitle(conversationId, currentTitle) {
                 // 防止事件冒泡

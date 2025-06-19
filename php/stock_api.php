@@ -68,9 +68,13 @@ if ($_POST['action'] ?? '' === 'get_stock_info') {
             exit;
         }
 
+        // 獲取財務數據
+        $financial_data = getFinancialData($ticker);
+
         echo json_encode([
             'success' => true,
-            'stock_info' => $result['data']
+            'stock_info' => $result['data'],
+            'financial_data' => $financial_data
         ]);
     } catch (Exception $e) {
         error_log("股票查詢錯誤: " . $e->getMessage());
@@ -135,6 +139,112 @@ if ($_GET['action'] ?? '' === 'get_popular_stocks') {
     }
 
     exit;
+}
+
+// 獲取財務數據和計算增長率
+function getFinancialData($ticker)
+{
+    try {
+        $db = new Database();
+        $pdo = $db->getConnection();
+
+        // 查詢該股票的財務數據，按年份排序
+        $stmt = $pdo->prepare("
+            SELECT 
+                filing_year,
+                stockholders_equity_current,
+                stockholders_equity_previous,
+                net_income_year1,
+                net_income_year2,
+                operating_cash_flow_year1,
+                operating_cash_flow_year2,
+                total_revenue_year1,
+                total_revenue_year2
+            FROM filings 
+            WHERE company_name = ? 
+            AND filing_type = '10-K'
+            AND financial_data_extracted = 1
+            ORDER BY filing_year ASC
+        ");
+
+        $stmt->execute([$ticker]);
+        $raw_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($raw_data)) {
+            return [
+                'years' => [],
+                'growth_rates' => [],
+                'message' => '目前沒有該股票的財務數據'
+            ];
+        }
+
+        $years = [];
+        $growth_rates = [];
+
+        foreach ($raw_data as $index => $data) {
+            $year = $data['filing_year'];
+            $years[] = $year;
+
+            $growth_rate = [
+                'year' => $year,
+                'equity_growth' => null,
+                'net_income_growth' => null,
+                'cash_flow_growth' => null,
+                'revenue_growth' => null
+            ];
+
+            // 計算股東權益增長率
+            if ($data['stockholders_equity_current'] && $data['stockholders_equity_previous']) {
+                $current = floatval($data['stockholders_equity_current']);
+                $previous = floatval($data['stockholders_equity_previous']);
+                if ($previous != 0) {
+                    $growth_rate['equity_growth'] = round((($current - $previous) / $previous) * 100, 2);
+                }
+            }
+
+            // 計算淨收入增長率
+            if ($data['net_income_year1'] && $data['net_income_year2']) {
+                $current = floatval($data['net_income_year1']);
+                $previous = floatval($data['net_income_year2']);
+                if ($previous != 0) {
+                    $growth_rate['net_income_growth'] = round((($current - $previous) / $previous) * 100, 2);
+                }
+            }
+
+            // 計算現金流增長率
+            if ($data['operating_cash_flow_year1'] && $data['operating_cash_flow_year2']) {
+                $current = floatval($data['operating_cash_flow_year1']);
+                $previous = floatval($data['operating_cash_flow_year2']);
+                if ($previous != 0) {
+                    $growth_rate['cash_flow_growth'] = round((($current - $previous) / $previous) * 100, 2);
+                }
+            }
+
+            // 計算營收增長率
+            if ($data['total_revenue_year1'] && $data['total_revenue_year2']) {
+                $current = floatval($data['total_revenue_year1']);
+                $previous = floatval($data['total_revenue_year2']);
+                if ($previous != 0) {
+                    $growth_rate['revenue_growth'] = round((($current - $previous) / $previous) * 100, 2);
+                }
+            }
+
+            $growth_rates[] = $growth_rate;
+        }
+
+        return [
+            'years' => $years,
+            'growth_rates' => $growth_rates,
+            'message' => count($growth_rates) > 0 ? '' : '無可用的財務增長率數據'
+        ];
+    } catch (Exception $e) {
+        error_log("獲取財務數據錯誤: " . $e->getMessage());
+        return [
+            'years' => [],
+            'growth_rates' => [],
+            'message' => '獲取財務數據時發生錯誤'
+        ];
+    }
 }
 
 echo json_encode(['success' => false, 'error' => '未知的操作']);
