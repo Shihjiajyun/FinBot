@@ -1,6 +1,20 @@
 <?php
 require_once 'config.php';
 
+// 格式化檔案大小的輔助函數
+function formatFileSize($bytes)
+{
+    if ($bytes >= 1073741824) {
+        return number_format($bytes / 1073741824, 2) . ' GB';
+    } elseif ($bytes >= 1048576) {
+        return number_format($bytes / 1048576, 2) . ' MB';
+    } elseif ($bytes >= 1024) {
+        return number_format($bytes / 1024, 2) . ' KB';
+    } else {
+        return $bytes . ' B';
+    }
+}
+
 header('Content-Type: application/json');
 
 // 檢查登入狀態
@@ -338,6 +352,93 @@ function getFinancialData($ticker)
             'total_years' => 0
         ];
     }
+}
+
+// 獲取10-K檔案列表
+if ($_POST['action'] ?? '' === 'get_10k_files') {
+    $ticker = strtoupper(trim($_POST['ticker'] ?? ''));
+
+    if (empty($ticker)) {
+        echo json_encode(['success' => false, 'error' => '股票代號不能為空']);
+        exit;
+    }
+
+    try {
+        // 使用相對路徑
+        $downloadsPath = __DIR__ . '/../downloads/' . $ticker . '/10-K/';
+
+        // 添加調試信息
+        $debugInfo = [
+            'ticker' => $ticker,
+            'current_dir' => __DIR__,
+            'downloads_path' => $downloadsPath,
+            'downloads_path_exists' => is_dir($downloadsPath),
+            'parent_dir' => dirname(__DIR__),
+            'downloads_base' => dirname(__DIR__) . '/downloads',
+            'downloads_base_exists' => is_dir(dirname(__DIR__) . '/downloads'),
+            'ticker_dir' => dirname(__DIR__) . '/downloads/' . $ticker,
+            'ticker_dir_exists' => is_dir(dirname(__DIR__) . '/downloads/' . $ticker)
+        ];
+
+        if (!is_dir($downloadsPath)) {
+            echo json_encode([
+                'success' => false,
+                'error' => '找不到該股票的10-K檔案目錄',
+                'debug_info' => $debugInfo
+            ]);
+            exit;
+        }
+
+        $files = [];
+        $allFiles = [];
+        $iterator = new DirectoryIterator($downloadsPath);
+
+        foreach ($iterator as $fileInfo) {
+            if ($fileInfo->isDot() || $fileInfo->isDir()) {
+                continue;
+            }
+
+            $filename = $fileInfo->getFilename();
+            $extension = pathinfo($filename, PATHINFO_EXTENSION);
+
+            // 記錄所有檔案用於調試
+            $allFiles[] = [
+                'filename' => $filename,
+                'extension' => $extension,
+                'size' => $fileInfo->getSize()
+            ];
+
+            if ($extension === 'txt') {
+                $files[] = [
+                    'filename' => $filename,
+                    'size' => formatFileSize($fileInfo->getSize()),
+                    'date' => date('Y-m-d H:i', $fileInfo->getMTime()),
+                    'path' => $fileInfo->getPathname()
+                ];
+            }
+        }
+
+        // 按修改時間排序，最新的在前
+        usort($files, function ($a, $b) {
+            return strcmp($b['date'], $a['date']);
+        });
+
+        echo json_encode([
+            'success' => true,
+            'files' => $files,
+            'total_files' => count($files),
+            'all_files_in_directory' => $allFiles,
+            'debug_info' => $debugInfo
+        ]);
+    } catch (Exception $e) {
+        echo json_encode([
+            'success' => false,
+            'error' => '讀取檔案列表時發生錯誤: ' . $e->getMessage(),
+            'debug_info' => $debugInfo ?? null
+        ]);
+    }
+
+    exit;
 }
 
 echo json_encode(['success' => false, 'error' => '未知的操作']);
