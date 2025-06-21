@@ -48,7 +48,8 @@ class TenKParser:
             'item_13': r'Item\s+13\.\s+(?:Certain Relationships|CERTAIN RELATIONSHIPS)',
             'item_14': r'Item\s+14\.\s+(?:Principal Accountant|PRINCIPAL ACCOUNTANT)',
             'item_15': r'Item\s+15\.\s+(?:Exhibits|EXHIBITS)',
-            'item_16': r'Item\s+16\.\s+(?:Form 10-K Summary|FORM 10-K SUMMARY)'
+            'item_16': r'Item\s+16\.\s+(?:Form 10-K Summary|FORM 10-K SUMMARY)',
+            'appendix': r'(?:INDEX\s+TO\s+FINANCIAL\s+STATEMENTS|APPENDIX|CONSOLIDATED\s+FINANCIAL\s+STATEMENTS)'
         }
 
     def connect_database(self):
@@ -223,7 +224,11 @@ class TenKParser:
         # 找到實際內容開始位置
         content_start = self.find_content_start_position(clean_content)
         
+        # 處理一般的Items
         for item_key, pattern in self.item_patterns.items():
+            if item_key == 'appendix':  # 附錄需要特殊處理
+                continue
+                
             try:
                 # 從內容開始位置搜索當前Item
                 search_content = clean_content[content_start:]
@@ -239,7 +244,7 @@ class TenKParser:
                 # 查找下一個Item的開始位置作為結束點
                 next_item_pos = len(clean_content)
                 for next_pattern in self.item_patterns.values():
-                    if next_pattern == pattern:
+                    if next_pattern == pattern or next_pattern == self.item_patterns['appendix']:
                         continue
                     next_match = re.search(next_pattern, clean_content[start_pos:], re.IGNORECASE | re.MULTILINE)
                     if next_match:
@@ -266,7 +271,109 @@ class TenKParser:
                 print(f"⚠️ 提取 {item_key} 時發生錯誤: {e}")
                 items[item_key] = None
         
+        # 特殊處理附錄
+        items['appendix'] = self.extract_appendix(clean_content)
+        
         return items
+
+    def extract_appendix(self, content):
+        """特殊處理附錄內容 - 基於F-頁碼和目錄結構識別（優化版）"""
+        try:
+            # 第一步：找到所有Items的最晚結束位置
+            latest_item_end = 0
+            
+            # 檢查所有Items，找到最後一個有效Item的結束位置
+            for item_key, pattern in self.item_patterns.items():
+                if item_key == 'appendix':
+                    continue
+                    
+                matches = list(re.finditer(pattern, content, re.IGNORECASE | re.MULTILINE))
+                if matches:
+                    # 取最後一個匹配的位置
+                    latest_match = matches[-1]
+                    # 估算該Item的結束位置（向後搜索1000個字符作為緩衝）
+                    item_end_estimate = latest_match.end() + 1000
+                    if item_end_estimate > latest_item_end:
+                        latest_item_end = item_end_estimate
+            
+            # 如果沒找到任何Item，從文件中間開始搜索
+            if latest_item_end == 0:
+                latest_item_end = len(content) // 2
+            
+            print(f"   📍 從位置 {latest_item_end} 開始搜索附錄...")
+            
+            # 第二步：限制搜索範圍，避免搜索整個文件
+            search_content = content[latest_item_end:]
+            max_search_length = min(100000, len(search_content))  # 限制搜索範圍為100KB
+            limited_search_content = search_content[:max_search_length]
+            
+            print(f"   🔍 搜索範圍限制為 {max_search_length} 字符")
+            
+            # 第三步：簡化的F-頁碼搜索
+            f_page_pattern = r'F-\d+'
+            f_matches = list(re.finditer(f_page_pattern, limited_search_content))
+            
+            if not f_matches:
+                print("   ❌ 未找到F-頁碼，無附錄內容")
+                return None
+            
+            print(f"   📄 找到 {len(f_matches)} 個F-頁碼")
+            
+            # 第四步：尋找第一個F-頁碼前的目錄標題
+            first_f_match = f_matches[0]
+            search_start = max(0, first_f_match.start() - 500)  # 向前搜索500字符
+            
+            # 簡化的目錄模式（避免複雜的正則表達式）
+            title_search_text = limited_search_content[search_start:first_f_match.start() + 100]
+            
+            # 尋找可能的標題關鍵字
+            title_keywords = [
+                'INDEX TO FINANCIAL STATEMENTS',
+                'FINANCIAL STATEMENTS',
+                'CONSOLIDATED FINANCIAL STATEMENTS',
+                'BALANCE SHEETS',
+                'STATEMENTS OF OPERATIONS'
+            ]
+            
+            appendix_start_offset = first_f_match.start()  # 預設從第一個F-頁碼開始
+            
+            for keyword in title_keywords:
+                keyword_pos = title_search_text.upper().find(keyword)
+                if keyword_pos != -1:
+                    # 找到標題，從標題開始
+                    actual_pos = search_start + keyword_pos
+                    if actual_pos < first_f_match.start():
+                        appendix_start_offset = actual_pos
+                        print(f"   🎯 找到附錄標題: {keyword}")
+                        break
+            
+            # 第五步：計算實際的附錄開始位置
+            appendix_start_pos = latest_item_end + appendix_start_offset
+            
+            # 第六步：提取附錄內容（從找到的位置到文件結尾）
+            appendix_content = content[appendix_start_pos:].strip()
+            
+            # 驗證內容確實包含F-頁碼
+            if not re.search(r'F-\d+', appendix_content[:1000]):  # 只檢查前1000字符
+                print("   ⚠️ 提取的內容不包含F-頁碼，可能不是附錄")
+                return None
+            
+            # 清理和限制長度
+            appendix_content = re.sub(r'\s+', ' ', appendix_content)
+            if len(appendix_content) > 65535:  # TEXT 欄位限制
+                appendix_content = appendix_content[:65532] + "..."
+            
+            if appendix_content:
+                preview = appendix_content[:100] + "..." if len(appendix_content) > 100 else appendix_content
+                f_pages = re.findall(r'F-\d+', appendix_content[:1000])  # 檢查前1000字符中的F-頁碼
+                print(f"   ✅ appendix: {len(appendix_content)} 字符，包含頁碼: {f_pages[:5]} - {preview}")
+                return appendix_content
+            
+            return None
+            
+        except Exception as e:
+            print(f"⚠️ 提取附錄時發生錯誤: {e}")
+            return None
 
     def generate_content_hash(self, content):
         """生成內容的MD5雜湊值，用於檢查重複"""
@@ -298,12 +405,12 @@ class TenKParser:
                     item_1, item_1a, item_1b, item_2, item_3, item_4,
                     item_5, item_6, item_7, item_7a, item_8, item_9,
                     item_9a, item_9b, item_10, item_11, item_12,
-                    item_13, item_14, item_15, item_16,
+                    item_13, item_14, item_15, item_16, appendix,
                     created_at
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
                 )
             """
             
@@ -335,7 +442,8 @@ class TenKParser:
                 items.get('item_13'),
                 items.get('item_14'),
                 items.get('item_15'),
-                items.get('item_16')
+                items.get('item_16'),
+                items.get('appendix')
             )
             
             cursor.execute(insert_sql, values)
