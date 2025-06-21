@@ -1570,3 +1570,227 @@ body {
         font-size: 16px;
     }
 }
+
+/* 新增：分析狀態樣式 */
+.stock-analyzing {
+    background: var(--dark-sidebar);
+    border: 1px solid var(--dark-border);
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    margin: 20px 0;
+}
+
+.analyzing-animation {
+    position: relative;
+    margin-bottom: 30px;
+}
+
+.analyzing-dots {
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+}
+
+.analyzing-dots span {
+    width: 8px;
+    height: 8px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    animation: analyzing-bounce 1.4s infinite ease-in-out both;
+}
+
+.analyzing-dots span:nth-child(1) { animation-delay: -0.32s; }
+.analyzing-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes analyzing-bounce {
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+    40% {
+        transform: scale(1);
+    }
+}
+
+.analyzing-steps {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    margin: 30px 0;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.analyzing-steps .step {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--dark-border);
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.3s ease;
+    opacity: 0.5;
+}
+
+.analyzing-steps .step.active {
+    background: rgba(44, 90, 160, 0.2);
+    border-color: var(--primary-color);
+    opacity: 1;
+    transform: scale(1.02);
+}
+
+.analyzing-steps .step.completed {
+    background: rgba(40, 167, 69, 0.2);
+    border-color: #28a745;
+    opacity: 1;
+}
+
+.analyzing-steps .step.completed i {
+    color: #28a745;
+}
+
+.analyzing-steps .step i {
+    font-size: 1.2rem;
+    color: var(--primary-color);
+}
+
+.analyzing-progress {
+    margin: 30px 0;
+}
+
+.progress-bar {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    height: 8px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.progress-fill {
+    background: linear-gradient(90deg, var(--primary-color), #4dabf7);
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.5s ease;
+    position: relative;
+}
+
+.progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    animation: progress-shimmer 2s infinite;
+}
+
+@keyframes progress-shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.progress-text {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin: 0;
+}
+
+.analyzing-note {
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 30px;
+    color: #ffc107;
+    font-size: 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.analyzing-note i {
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+/* 超時和強制分析按鈕 */
+.timeout-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 20px;
+}
+
+.force-btn {
+    background: #fd7e14;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.force-btn:hover {
+    background: #e8590c;
+    transform: translateY(-2px);
+}
+
+/* 新分析通知 */
+.fresh-analysis-notice {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    border-radius: 8px;
+    padding: 12px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
+    font-weight: 500;
+    animation: slide-in-top 0.5s ease-out;
+}
+
+.fresh-analysis-notice i {
+    font-size: 1.2rem;
+}
+
+@keyframes slide-in-top {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+    .analyzing-steps {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .stock-analyzing {
+        padding: 30px 20px;
+    }
+    
+    .timeout-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .timeout-actions button {
+        width: 100%;
+        max-width: 200px;
+    }
+}
