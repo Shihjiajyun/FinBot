@@ -617,19 +617,111 @@ function displayConversationHistory(conversations) {
             <div class="history-item" data-conversation-id="${conv.conversation_id}">
                 <div class="history-content" onclick="openConversation('${conv.conversation_id}', '${conv.title}')">
                     <i class="bi bi-chat-dots"></i>
-                <div class="question-preview">
-                        <div style="font-weight: 500;">${ticker}</div>
-                    <div style="font-size: 12px; color: #8e8ea0; margin-top: 2px;">
+                    <div class="question-preview">
+                        <div class="title-display" style="font-weight: 500;" id="title-display-${conv.conversation_id}">
+                            ${ticker}
+                        </div>
+                        <div class="title-edit" style="display: none;" id="title-edit-${conv.conversation_id}">
+                            <input type="text" class="title-input" value="${conv.title}" 
+                                   onkeydown="handleTitleKeydown(event, '${conv.conversation_id}')"
+                                   onblur="cancelTitleEdit('${conv.conversation_id}')"
+                                   style="width: 100%; font-size: 12px; padding: 2px 4px; border: 1px solid #ccc; border-radius: 3px;">
+                        </div>
+                        <div style="font-size: 12px; color: #8e8ea0; margin-top: 2px;">
                             ${fileInfo}
-                    </div>
+                        </div>
                         <div style="font-size: 11px; color: #666; margin-top: 4px;">
                             ${conv.question_count} 個問題 • ${timeAgo}
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
+                <div class="history-actions">
+                    <button class="edit-title-btn" onclick="editConversationTitle(event, '${conv.conversation_id}')" 
+                            title="編輯標題" style="background: none; border: none; color: #8e8ea0; font-size: 12px; padding: 2px;">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                </div>
             </div>
         `;
     }).join('');
+}
+
+// 編輯對話標題
+function editConversationTitle(event, conversationId) {
+    event.stopPropagation(); // 防止觸發對話打開
+    
+    const titleDisplay = document.getElementById(`title-display-${conversationId}`);
+    const titleEdit = document.getElementById(`title-edit-${conversationId}`);
+    const input = titleEdit.querySelector('.title-input');
+    
+    titleDisplay.style.display = 'none';
+    titleEdit.style.display = 'block';
+    input.focus();
+    input.select();
+}
+
+// 處理標題編輯鍵盤事件
+function handleTitleKeydown(event, conversationId) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        saveConversationTitle(conversationId);
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelTitleEdit(conversationId);
+    }
+}
+
+// 取消標題編輯
+function cancelTitleEdit(conversationId) {
+    const titleDisplay = document.getElementById(`title-display-${conversationId}`);
+    const titleEdit = document.getElementById(`title-edit-${conversationId}`);
+    
+    titleDisplay.style.display = 'block';
+    titleEdit.style.display = 'none';
+}
+
+// 保存對話標題
+function saveConversationTitle(conversationId) {
+    const titleEdit = document.getElementById(`title-edit-${conversationId}`);
+    const input = titleEdit.querySelector('.title-input');
+    const newTitle = input.value.trim();
+    
+    if (!newTitle) {
+        alert('標題不能為空');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('action', 'update_conversation_title');
+    formData.append('conversation_id', conversationId);
+    formData.append('new_title', newTitle);
+    
+    fetch('stock_qa_api.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 更新顯示的標題
+            const titleDisplay = document.getElementById(`title-display-${conversationId}`);
+            const titleParts = newTitle.split('_');
+            const ticker = titleParts[0] || 'Unknown';
+            titleDisplay.textContent = ticker;
+            
+            // 隱藏編輯框
+            cancelTitleEdit(conversationId);
+            
+            // 重新載入對話歷史以確保一致性
+            setTimeout(() => loadConversationHistory(), 500);
+        } else {
+            alert('更新標題失敗: ' + (data.error || '未知錯誤'));
+        }
+    })
+    .catch(error => {
+        console.error('更新標題錯誤:', error);
+        alert('更新標題時發生錯誤');
+    });
 }
 
 // 格式化時間差

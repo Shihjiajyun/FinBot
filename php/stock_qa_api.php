@@ -58,6 +58,19 @@ try {
             getConversationMessages($pdo);
             break;
 
+        case 'update_conversation_title':
+            $conversationId = $_POST['conversation_id'] ?? '';
+            $newTitle = trim($_POST['new_title'] ?? '');
+
+            if (empty($conversationId) || empty($newTitle)) {
+                echo json_encode(['success' => false, 'error' => '參數不完整']);
+                exit;
+            }
+
+            $result = updateConversationTitle($pdo, $conversationId, $newTitle, $_SESSION['user_id']);
+            echo json_encode($result);
+            exit;
+
         default:
             echo json_encode(['success' => false, 'error' => '未知的操作']);
     }
@@ -634,6 +647,7 @@ function get10KFileContent($ticker, $filename)
                 SELECT 
                     s.*,
                     f.file_name as original_file_name,
+                    f.company_name,
                     f.report_date
                 FROM ten_k_filings_summary s
                 INNER JOIN ten_k_filings f ON s.original_filing_id = f.id
@@ -648,7 +662,19 @@ function get10KFileContent($ticker, $filename)
                 return null;
             }
 
-            $allContent = "";
+            // 生成基本資訊摘要
+            $basicInfo = "## 公司10-K檔案基本資訊\n\n";
+            $basicInfo .= "**公司代號**: $ticker\n";
+            $basicInfo .= "**公司名稱**: {$summaries[0]['company_name']}\n";
+            $basicInfo .= "**可用檔案數量**: " . count($summaries) . " 份\n\n";
+
+            $basicInfo .= "### 檔案列表\n";
+            foreach ($summaries as $summary) {
+                $basicInfo .= "- **{$summary['original_file_name']}** (報告期間: {$summary['report_date']})\n";
+            }
+            $basicInfo .= "\n---\n\n";
+
+            $allContent = $basicInfo;
             foreach ($summaries as $summary) {
                 $allContent .= "\n\n=== 檔案：{$summary['original_file_name']} (報告日期：{$summary['report_date']}) ===\n\n";
 
@@ -686,26 +712,55 @@ function get10KFileContent($ticker, $filename)
 
             return $allContent ?: null;
         } else {
-            // 獲取特定檔案的摘要內容
+            // 獲取特定檔案的摘要內容 - 改善查詢邏輯
             $stmt = $pdo->prepare("
                 SELECT 
                     s.*,
                     f.file_name as original_file_name,
+                    f.company_name,
                     f.report_date
                 FROM ten_k_filings_summary s
                 INNER JOIN ten_k_filings f ON s.original_filing_id = f.id
-                WHERE f.file_name = ? AND (f.company_name LIKE ? OR f.company_name = ?)
+                WHERE f.file_name = ? 
                 LIMIT 1
             ");
-            $stmt->execute([$filename, "%$ticker%", $ticker]);
+            $stmt->execute([$filename]);
             $summary = $stmt->fetch(PDO::FETCH_ASSOC);
 
+            // 如果沒找到，嘗試模糊匹配
             if (!$summary) {
-                error_log("找不到檔案 $filename 的摘要資料");
+                $stmt = $pdo->prepare("
+                    SELECT 
+                        s.*,
+                        f.file_name as original_file_name,
+                        f.company_name,
+                        f.report_date
+                    FROM ten_k_filings_summary s
+                    INNER JOIN ten_k_filings f ON s.original_filing_id = f.id
+                    WHERE f.file_name LIKE ? AND (f.company_name LIKE ? OR f.company_name = ?)
+                    LIMIT 1
+                ");
+                $stmt->execute(["%$filename%", "%$ticker%", $ticker]);
+                $summary = $stmt->fetch(PDO::FETCH_ASSOC);
+            }
+
+            if (!$summary) {
+                error_log("找不到檔案 $filename 的摘要資料，ticker: $ticker");
                 return null;
             }
 
-            $content = "=== 檔案：{$summary['original_file_name']} (報告日期：{$summary['report_date']}) ===\n\n";
+            // 生成基本資訊
+            $basicInfo = "## 10-K檔案基本資訊\n\n";
+            $basicInfo .= "**檔案名稱**: {$summary['original_file_name']}\n";
+            $basicInfo .= "**公司名稱**: {$summary['company_name']}\n";
+            $basicInfo .= "**公司代號**: $ticker\n";
+            $basicInfo .= "**報告期間結束日期**: {$summary['report_date']}\n";
+            $basicInfo .= "**摘要處理狀態**: {$summary['processing_status']}\n";
+            $basicInfo .= "**已處理項目**: {$summary['items_processed_count']}/{$summary['total_items_count']}\n\n";
+            $basicInfo .= "---\n\n";
+
+            $content = $basicInfo;
+            $content .= "=== 檔案內容摘要：{$summary['original_file_name']} ===\n\n";
 
             // 組合所有摘要內容
             $itemSummaries = [
@@ -745,6 +800,8 @@ function get10KFileContent($ticker, $filename)
         return null;
     }
 }
+
+
 
 /**
  * 生成10-K的GPT回答
@@ -1013,5 +1070,30 @@ function getConversationMessages($pdo)
     } catch (Exception $e) {
         error_log("獲取對話訊息錯誤: " . $e->getMessage());
         echo json_encode(['success' => false, 'error' => '獲取對話訊息失敗']);
+    }
+}
+
+/**
+ * 更新對話標題
+ */
+function updateConversationTitle($pdo, $conversationId, $newTitle, $userId)
+{
+    try {
+        // 驗證對話是否屬於該用戶
+        $stmt = $pdo->prepare("SELECT id FROM conversations WHERE id = ? AND user_id = ?");
+        $stmt->execute([$conversationId, $userId]);
+
+        if (!$stmt->fetch()) {
+            return ['success' => false, 'error' => '無權限修改此對話'];
+        }
+
+        // 更新標題
+        $stmt = $pdo->prepare("UPDATE conversations SET title = ?, updated_at = NOW() WHERE id = ? AND user_id = ?");
+        $stmt->execute([$newTitle, $conversationId, $userId]);
+
+        return ['success' => true, 'message' => '對話標題已更新'];
+    } catch (Exception $e) {
+        error_log("更新對話標題錯誤: " . $e->getMessage());
+        return ['success' => false, 'error' => '更新失敗'];
     }
 }

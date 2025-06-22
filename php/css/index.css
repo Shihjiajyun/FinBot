@@ -3548,3 +3548,40 @@ body {
 #stock-ticker-input:hover {
     border-color: rgba(255, 255, 255, 0.5) !important;
 }
+
+/* 對話歷史編輯標題功能 */
+.history-item .title-edit {
+    margin-top: 2px;
+}
+
+.history-item .title-input {
+    background: var(--dark-bg);
+    color: white;
+    border: 1px solid #404040;
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 12px;
+    width: 100%;
+}
+
+.history-item .title-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(44, 90, 160, 0.2);
+}
+
+.edit-title-btn {
+    background: none;
+    border: none;
+    color: #8e8ea0;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: color 0.2s, background 0.2s;
+    font-size: 12px;
+}
+
+.edit-title-btn:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+}
