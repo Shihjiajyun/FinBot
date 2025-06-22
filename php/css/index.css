@@ -24,8 +24,9 @@ body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: var(--dark-bg);
     color: white;
-    overflow: hidden;
-    height: 100vh;
+    overflow: auto;
+    min-height: 100vh;
+    overflow-x: hidden;
 }
 
 /* 側邊欄樣式 */
@@ -182,7 +183,7 @@ body {
 /* 主要內容區域 - 加寬顯示區域 */
 .main-content {
     margin-left: var(--sidebar-width);
-    height: 100vh;
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
     max-width: none;
@@ -903,9 +904,9 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
-    position: relative;
+    height: auto;
+    overflow: visible;
+    position: static;
 }
 
 .stock-query-header {
@@ -926,7 +927,9 @@ body {
     padding: 20px 30px;
     background: var(--card-bg);
     border-bottom: 1px solid var(--border-color);
-    flex-shrink: 0;
+    position: static !important;
+    top: auto !important;
+    z-index: auto !important;
 }
 
 .search-form {
@@ -938,7 +941,7 @@ body {
 .stock-input {
     flex: 1;
     padding: 12px 16px;
-    border: 2px solid var(--border-color);
+    border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 12px;
     background: var(--bg-color);
     color: var(--text-color);
@@ -999,10 +1002,8 @@ body {
 }
 
 .stock-result-area {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0;
-    background: var(--bg-color);
+    max-height: none !important;
+    height: auto;
 }
 
 /* 股票資訊顯示區域 */
@@ -1223,16 +1224,6 @@ body {
     margin-bottom: 2px;
 }
 
-/* 移除之前的固定定位樣式 */
-.stock-search-area {
-    position: static;
-    top: auto;
-    left: auto;
-    right: auto;
-    z-index: auto;
-    width: auto;
-    box-shadow: none;
-}
 
 /* 股票結果區域 */
 .stock-loading {
@@ -3000,4 +2991,561 @@ body {
 
 #stock-result-area::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.5);
+}
+
+/* 10-K 聊天窗口樣式 */
+.tenk-chat-window {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tenk-chat-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    cursor: pointer;
+}
+
+.tenk-chat-container {
+    position: relative;
+    width: 90vw;
+    max-width: 1200px;
+    height: 85vh;
+    background: var(--dark-sidebar);
+    border-radius: 12px;
+    border: 1px solid var(--dark-border);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
+    z-index: 1;
+}
+
+.tenk-chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 25px;
+    border-bottom: 1px solid var(--dark-border);
+    background: linear-gradient(135deg, #2c5aa0 0%, #1a4480 100%);
+    border-radius: 12px 12px 0 0;
+}
+
+.tenk-chat-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.tenk-chat-title i {
+    font-size: 22px;
+}
+
+.tenk-chat-close {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: white;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.tenk-chat-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.tenk-chat-close i {
+    font-size: 16px;
+}
+
+.tenk-chat-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.tenk-chat-messages {
+    flex: 1;
+    padding: 25px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-height: 0;
+}
+
+.tenk-chat-messages::-webkit-scrollbar {
+    width: 8px;
+}
+
+.tenk-chat-messages::-webkit-scrollbar-track {
+    background: var(--dark-sidebar);
+}
+
+.tenk-chat-messages::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
+}
+
+.tenk-chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+.welcome-message {
+    background: rgba(44, 90, 160, 0.1);
+    border: 1px solid rgba(44, 90, 160, 0.3);
+    border-radius: 12px;
+    padding: 25px;
+    display: flex;
+    gap: 15px;
+    align-items: flex-start;
+}
+
+.welcome-message .bot-avatar {
+    background: linear-gradient(135deg, #2c5aa0, #1a4480);
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.welcome-message .message-content {
+    flex: 1;
+}
+
+.welcome-message h5 {
+    color: white;
+    font-size: 20px;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.welcome-message p {
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.suggested-questions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.suggested-btn {
+    background: rgba(44, 90, 160, 0.2);
+    border: 1px solid rgba(44, 90, 160, 0.4);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.suggested-btn:hover {
+    background: rgba(44, 90, 160, 0.4);
+    border-color: rgba(44, 90, 160, 0.6);
+    transform: translateY(-1px);
+}
+
+.chat-message {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.chat-message.user {
+    flex-direction: row-reverse;
+}
+
+.chat-message .bot-avatar,
+.chat-message .user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.chat-message .bot-avatar {
+    background: linear-gradient(135deg, #2c5aa0, #1a4480);
+}
+
+.chat-message .user-avatar {
+    background: linear-gradient(135deg, #4a90e2, #357abd);
+}
+
+.chat-message .message-content {
+    max-width: 75%;
+    background: var(--dark-bg);
+    border: 1px solid var(--dark-border);
+    border-radius: 12px;
+    padding: 15px 18px;
+    color: white;
+    line-height: 1.6;
+}
+
+.chat-message.user .message-content {
+    background: linear-gradient(135deg, #4a90e2, #357abd);
+    border-color: #4a90e2;
+}
+
+.chat-message.bot.thinking-message .message-content {
+    background: rgba(44, 90, 160, 0.1);
+    border-color: rgba(44, 90, 160, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.thinking-animation {
+    display: flex;
+    gap: 4px;
+}
+
+.thinking-animation span {
+    width: 8px;
+    height: 8px;
+    background: #2c5aa0;
+    border-radius: 50%;
+    animation: thinking-bounce 1.4s infinite ease-in-out;
+}
+
+.thinking-animation span:nth-child(1) { animation-delay: -0.32s; }
+.thinking-animation span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes thinking-bounce {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+}
+
+.chat-message.error .message-content {
+    background: rgba(220, 53, 69, 0.1);
+    border-color: rgba(220, 53, 69, 0.3);
+    color: #ff6b6b;
+}
+
+.tenk-chat-input {
+    padding: 20px 25px;
+    border-top: 1px solid var(--dark-border);
+    background: var(--dark-bg);
+    border-radius: 0 0 12px 12px;
+}
+
+.tenk-chat-input .input-container {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+}
+
+.tenk-chat-input textarea {
+    flex: 1;
+    background: var(--dark-sidebar);
+    border: 1px solid var(--dark-border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: white;
+    font-size: 14px;
+    resize: none;
+    max-height: 120px;
+    min-height: 45px;
+    line-height: 1.4;
+}
+
+.tenk-chat-input textarea:focus {
+    outline: none;
+    border-color: #2c5aa0;
+    box-shadow: 0 0 0 2px rgba(44, 90, 160, 0.2);
+}
+
+.tenk-chat-input textarea::placeholder {
+    color: var(--text-muted);
+}
+
+.tenk-chat-input button {
+    background: #2c5aa0;
+    border: none;
+    color: white;
+    width: 45px;
+    height: 45px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.tenk-chat-input button:hover:not(:disabled) {
+    background: #1a4480;
+}
+
+.tenk-chat-input button:disabled {
+    background: #555;
+    cursor: not-allowed;
+}
+
+/* ALL按鈕特殊樣式 */
+.file-item.all-files-btn {
+    background: linear-gradient(135deg, #2c5aa0 0%, #1a4480 100%);
+    border-color: #2c5aa0;
+    color: white;
+}
+
+.file-item.all-files-btn:hover {
+    background: linear-gradient(135deg, #1a4480 0%, #0f2a5a 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(44, 90, 160, 0.3);
+}
+
+.file-item.all-files-btn .file-icon {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.file-item.all-files-btn .file-details small {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+    .tenk-chat-container {
+        width: 95vw;
+        height: 90vh;
+        margin: 2.5vh auto;
+    }
+    
+    .tenk-chat-header {
+        padding: 15px 20px;
+    }
+    
+    .tenk-chat-title {
+        font-size: 16px;
+    }
+    
+    .tenk-chat-messages {
+        padding: 20px;
+    }
+    
+    .welcome-message {
+        padding: 20px;
+    }
+    
+    .chat-message .message-content {
+        max-width: 85%;
+        padding: 12px 15px;
+    }
+    
+    .suggested-questions {
+        gap: 8px;
+    }
+    
+    .suggested-btn {
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+    
+    .tenk-chat-input {
+        padding: 15px 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .tenk-chat-container {
+        width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+    }
+    
+    .tenk-chat-header {
+        border-radius: 0;
+        padding: 12px 15px;
+    }
+    
+    .tenk-chat-title {
+        font-size: 15px;
+    }
+    
+    .tenk-chat-title i {
+        font-size: 18px;
+    }
+    
+    .tenk-chat-messages {
+        padding: 15px;
+    }
+    
+    .welcome-message {
+        padding: 15px;
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .welcome-message .bot-avatar {
+        align-self: center;
+    }
+    
+    .chat-message .message-content {
+        max-width: 90%;
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+    
+    .suggested-questions {
+        flex-direction: column;
+        gap: 6px;
+    }
+    
+    .suggested-btn {
+        padding: 8px 12px;
+        border-radius: 15px;
+        text-align: center;
+    }
+}
+
+/* Markdown 樣式 for 10-K 聊天內容 */
+.chat-message .message-content h1,
+.chat-message .message-content h2,
+.chat-message .message-content h3,
+.chat-message .message-content h4,
+.chat-message .message-content h5,
+.chat-message .message-content h6 {
+    margin: 15px 0 10px 0;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.chat-message .message-content h1 { font-size: 1.6em; }
+.chat-message .message-content h2 { font-size: 1.4em; }
+.chat-message .message-content h3 { font-size: 1.3em; }
+.chat-message .message-content h4 { font-size: 1.2em; }
+.chat-message .message-content h5 { font-size: 1.1em; }
+.chat-message .message-content h6 { font-size: 1em; }
+
+.chat-message .message-content ul,
+.chat-message .message-content ol {
+    margin: 10px 0;
+    padding-left: 20px;
+}
+
+.chat-message .message-content li {
+    margin: 5px 0;
+    line-height: 1.5;
+}
+
+.chat-message .message-content strong,
+.chat-message .message-content b {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.chat-message .message-content em,
+.chat-message .message-content i {
+    color: #b3b3b3;
+    font-style: italic;
+}
+
+.chat-message .message-content code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    color: #ffd700;
+}
+
+.chat-message .message-content pre {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 15px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 15px 0;
+    border-left: 4px solid #2c5aa0;
+}
+
+.chat-message .message-content pre code {
+    background: none;
+    padding: 0;
+    color: #f8f8f2;
+}
+
+.chat-message .message-content blockquote {
+    border-left: 4px solid #2c5aa0;
+    padding-left: 15px;
+    margin: 15px 0;
+    color: #b3b3b3;
+    font-style: italic;
+}
+
+.chat-message .message-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.chat-message .message-content th,
+.chat-message .message-content td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chat-message .message-content th {
+    background: rgba(44, 90, 160, 0.3);
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.chat-message .message-content a {
+    color: #4a90e2;
+    text-decoration: none;
+}
+
+.chat-message .message-content a:hover {
+    text-decoration: underline;
+}
+
+/* 確保輸入框邊框可見性 */
+.stock-input,
+#stock-ticker-input {
+    border: 2px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+.stock-input:hover,
+#stock-ticker-input:hover {
+    border-color: rgba(255, 255, 255, 0.5) !important;
 }

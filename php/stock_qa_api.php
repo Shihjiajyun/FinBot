@@ -41,6 +41,10 @@ try {
             askStockQuestion($pdo, $ticker);
             break;
 
+        case 'ask_10k_question':
+            ask10KQuestion($pdo, $ticker);
+            break;
+
         default:
             echo json_encode(['success' => false, 'error' => '未知的操作']);
     }
@@ -470,4 +474,291 @@ function saveUserQuestionHistory($pdo, $userId, $questionId, $conversationId)
         VALUES (?, ?, ?, CURRENT_TIMESTAMP)
     ");
     $stmt->execute([$userId, $questionId, $conversationId]);
+}
+
+/**
+ * 處理10-K檔案問題
+ */
+function ask10KQuestion($pdo, $ticker)
+{
+    $question = trim($_POST['question'] ?? '');
+    $filename = trim($_POST['filename'] ?? '');
+
+    if (empty($question)) {
+        echo json_encode(['success' => false, 'error' => '問題不能為空']);
+        return;
+    }
+
+    if (empty($filename)) {
+        echo json_encode(['success' => false, 'error' => '檔案名稱不能為空']);
+        return;
+    }
+
+    try {
+        // 1. 檢查是否有相同問題的快取答案
+        $cacheKey = $ticker . '_' . $filename . '_' . md5($question);
+        $cachedAnswer = get10KCachedAnswer($pdo, $cacheKey);
+        $isCached = false;
+
+        if ($cachedAnswer) {
+            $answer = $cachedAnswer;
+            $isCached = true;
+            error_log("使用10-K快取答案: " . substr($question, 0, 50) . "...");
+        } else {
+            // 2. 獲取10-K檔案內容
+            $tenKContent = get10KFileContent($ticker, $filename);
+
+            if (!$tenKContent) {
+                echo json_encode([
+                    'success' => false,
+                    'error' => "無法讀取 $ticker 的 10-K 檔案：$filename"
+                ]);
+                return;
+            }
+
+            // 3. 調用GPT生成答案
+            $answer = generate10KGPTAnswer($question, $tenKContent, $ticker, $filename);
+
+            if (!$answer) {
+                echo json_encode(['success' => false, 'error' => 'GPT 回答生成失敗，請稍後再試']);
+                return;
+            }
+
+            // 4. 快取答案
+            cache10KAnswer($pdo, $cacheKey, $answer);
+        }
+
+        // 5. 獲取或創建10-K對話
+        $conversationTitle = $filename === 'ALL' ?
+            "{$ticker}_所有10K檔案" :
+            "{$ticker}_{$filename}";
+        $conversationId = getOrCreate10KConversation($pdo, $_SESSION['user_id'], $conversationTitle);
+
+        // 6. 儲存問答記錄
+        $questionId = saveQuestionAnswer($pdo, $conversationId, $question, $answer, $_SESSION['user_id']);
+
+        echo json_encode([
+            'success' => true,
+            'answer' => $answer,
+            'is_cached' => $isCached,
+            'question_id' => $questionId,
+            'conversation_id' => $conversationId
+        ]);
+    } catch (Exception $e) {
+        error_log("處理10-K問題錯誤: " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => '處理問題時發生錯誤']);
+    }
+}
+
+/**
+ * 獲取10-K快取答案
+ */
+function get10KCachedAnswer($pdo, $cacheKey)
+{
+    try {
+        $stmt = $pdo->prepare("
+            SELECT answer 
+            FROM tenk_qa_cache 
+            WHERE cache_key = ? 
+            AND created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+            ORDER BY created_at DESC 
+            LIMIT 1
+        ");
+        $stmt->execute([$cacheKey]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $result ? $result['answer'] : null;
+    } catch (Exception $e) {
+        error_log("獲取10-K快取答案錯誤: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * 快取10-K答案
+ */
+function cache10KAnswer($pdo, $cacheKey, $answer)
+{
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO tenk_qa_cache (cache_key, answer, created_at) 
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE 
+            answer = VALUES(answer), 
+            created_at = VALUES(created_at)
+        ");
+        $stmt->execute([$cacheKey, $answer]);
+    } catch (Exception $e) {
+        error_log("快取10-K答案錯誤: " . $e->getMessage());
+    }
+}
+
+/**
+ * 獲取10-K檔案內容
+ */
+function get10KFileContent($ticker, $filename)
+{
+    try {
+        if ($filename === 'ALL') {
+            // 獲取所有10-K檔案內容
+            $baseDir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'downloads' . DIRECTORY_SEPARATOR . $ticker . DIRECTORY_SEPARATOR . '10-K';
+
+            if (!is_dir($baseDir)) {
+                return null;
+            }
+
+            $allContent = "";
+            $files = glob($baseDir . DIRECTORY_SEPARATOR . '*.txt');
+
+            foreach ($files as $file) {
+                $content = file_get_contents($file);
+                if ($content) {
+                    $fileName = basename($file);
+                    $allContent .= "\n\n=== 檔案：$fileName ===\n\n";
+                    $allContent .= $content;
+                }
+            }
+
+            return $allContent ?: null;
+        } else {
+            // 獲取特定檔案內容
+            $filePath = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'downloads' . DIRECTORY_SEPARATOR . $ticker . DIRECTORY_SEPARATOR . '10-K' . DIRECTORY_SEPARATOR . $filename;
+
+            if (!file_exists($filePath)) {
+                return null;
+            }
+
+            return file_get_contents($filePath);
+        }
+    } catch (Exception $e) {
+        error_log("讀取10-K檔案錯誤: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * 生成10-K的GPT回答
+ */
+function generate10KGPTAnswer($question, $tenKContent, $ticker, $filename)
+{
+    try {
+        global $openaiApiKey;
+
+        if (empty($openaiApiKey)) {
+            error_log("OpenAI API key 未設定");
+            return null;
+        }
+
+        // 限制內容長度以避免超過API限制
+        $contentLimit = 15000; // 約15k字符
+        if (strlen($tenKContent) > $contentLimit) {
+            $tenKContent = substr($tenKContent, 0, $contentLimit) . "\n\n[內容因長度限制而截斷]";
+        }
+
+        $fileInfo = $filename === 'ALL' ? "所有10-K檔案" : "10-K檔案：$filename";
+
+        $prompt = "
+基於以下 $ticker 的 $fileInfo 內容，請回答用戶的問題。
+
+**重要回答準則：**
+
+1. **基於實際內容回答** - 只能基於提供的10-K檔案實際內容回答，不能添加檔案中沒有的資訊
+2. **明確數據來源** - 引用具體的段落、數字、比率等，並說明來自檔案的哪個部分
+3. **承認限制** - 如果檔案中沒有相關資訊，明確說明「提供的10-K檔案內容中沒有此資訊」
+4. **結構化回答** - 使用Markdown格式，包含標題、列表、粗體等
+
+**回答格式：**
+- 使用繁體中文
+- 支援Markdown格式（##標題、**粗體**、列表等）
+- 對重要數據使用**粗體**標記
+- 如果適合，可以在回答末尾提供圖表數據
+
+10-K檔案內容：
+$tenKContent
+
+用戶問題：$question
+
+請提供專業、準確的回答：
+";
+
+        // 調用 OpenAI API
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, 'https://api.openai.com/v1/chat/completions');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $openaiApiKey
+        ]);
+
+        $data = [
+            'model' => 'gpt-4-turbo',
+            'messages' => [
+                [
+                    'role' => 'system',
+                    'content' => '你是一個專業的財務分析師，專門分析SEC 10-K檔案。你必須嚴格基於提供的檔案內容回答問題，不能添加檔案中沒有的資訊。對於每個回答，你必須明確引用檔案中的具體內容作為依據。'
+                ],
+                [
+                    'role' => 'user',
+                    'content' => $prompt
+                ]
+            ],
+            'max_tokens' => 2000,
+            'temperature' => 0.1
+        ];
+
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200) {
+            error_log("OpenAI API 錯誤: HTTP $httpCode - $response");
+            return null;
+        }
+
+        $result = json_decode($response, true);
+
+        if (!$result || !isset($result['choices'][0]['message']['content'])) {
+            error_log("OpenAI API 回應格式錯誤: " . $response);
+            return null;
+        }
+
+        return trim($result['choices'][0]['message']['content']);
+    } catch (Exception $e) {
+        error_log("生成10-K GPT答案錯誤: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * 獲取或創建10-K對話
+ */
+function getOrCreate10KConversation($pdo, $userId, $title)
+{
+    // 查找現有對話
+    $stmt = $pdo->prepare("
+        SELECT id FROM conversations 
+        WHERE user_id = ? AND title = ?
+        ORDER BY updated_at DESC 
+        LIMIT 1
+    ");
+    $stmt->execute([$userId, $title]);
+    $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if ($existing) {
+        // 更新最後活動時間
+        $stmt = $pdo->prepare("UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+        $stmt->execute([$existing['id']]);
+        return $existing['id'];
+    }
+
+    // 創建新對話
+    $stmt = $pdo->prepare("
+        INSERT INTO conversations (user_id, title, created_at, updated_at) 
+        VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ");
+    $stmt->execute([$userId, $title]);
+    return $pdo->lastInsertId();
 }

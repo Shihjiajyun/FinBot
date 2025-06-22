@@ -409,47 +409,6 @@ function displayStockInfo(stockInfo, financialData, freshlyAnalyzed = false) {
                 </div>
             </div>
         </div>
-
-        <!-- 股票問答區塊 -->
-        <div class="stock-qa-section" id="qa-section-${stockInfo.symbol}">
-            <div class="qa-header">
-                <h4><i class="bi bi-chat-square-text"></i> 針對 ${stockInfo.symbol} 的智能問答</h4>
-            </div>
-
-            <!-- 問答歷史 -->
-            <div class="qa-history" id="qa-history-${stockInfo.symbol}">
-                <div class="loading-qa-history">
-                    <i class="bi bi-hourglass-split"></i> 正在載入對話歷史...
-                </div>
-            </div>
-
-            <!-- 問題輸入區 -->
-            <div class="qa-input-area">
-                <!-- 建議問題 -->
-                <div class="qa-suggested-questions">
-                    <button class="suggested-question-btn" onclick="askSuggestedQuestion('${stockInfo.symbol}', '公司的主要業務和產品是什麼？')">主要業務</button>
-                    <button class="suggested-question-btn" onclick="askSuggestedQuestion('${stockInfo.symbol}', '最主要的風險因素有哪些？')">風險因素</button>
-                    <button class="suggested-question-btn" onclick="askSuggestedQuestion('${stockInfo.symbol}', '近年來的財務表現如何？')">財務表現</button>
-                    <button class="suggested-question-btn" onclick="askSuggestedQuestion('${stockInfo.symbol}', '競爭優勢和市場地位如何？')">競爭優勢</button>
-                </div>
-                
-                <form class="qa-input-form" onsubmit="return false;">
-                    <textarea 
-                        id="qa-question-input-${stockInfo.symbol}" 
-                        class="qa-input" 
-                        placeholder="請針對 ${stockInfo.symbol} 提出您的問題..."
-                        rows="2"
-                    ></textarea>
-                    <button 
-                        type="button"
-                        class="qa-submit-btn" 
-                        onclick="askStockQuestion('${stockInfo.symbol}')"
-                    >
-                        <i class="bi bi-send"></i>
-                    </button>
-                </form>
-            </div>
-        </div>
     `;
 
     // 異步載入10-K檔案列表
@@ -460,12 +419,9 @@ function displayStockInfo(stockInfo, financialData, freshlyAnalyzed = false) {
     }).catch(error => {
         console.error('❌ getTenKFiles 失敗:', error);
     });
-
-    // 載入問答歷史
-    loadStockQAHistory(stockInfo.symbol);
     
-    // 記錄到股票查詢歷史
-    addStockToHistory(stockInfo.symbol, stockInfo.company_name);
+    // 不再立即記錄到股票查詢歷史，等到用戶開始10-K對話時再記錄
+    // addStockToHistory(stockInfo.symbol, stockInfo.company_name);
 }
 
 // 添加股票到查詢歷史
@@ -635,8 +591,21 @@ function getTenKFiles(ticker) {
                         <h5><i class="bi bi-file-earmark-text"></i> 10-K 財報檔案</h5>
                         <div class="ten-k-files-container">
                             <div class="files-grid">
+                                <!-- ALL 按鈕 -->
+                                <div class="file-item all-files-btn" onclick="openTenKChat('${ticker}', 'ALL')">
+                                    <div class="file-icon">
+                                        <i class="bi bi-collection"></i>
+                                    </div>
+                                    <div class="file-info">
+                                        <div class="file-name">所有 10-K 檔案</div>
+                                        <div class="file-details">
+                                            <small>與所有 10-K 檔案對話</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- 個別檔案 -->
                                 ${data.files.map(file => `
-                                    <div class="file-item" onclick="openTenKFile('${ticker}', '${file.filename}')">
+                                    <div class="file-item" onclick="openTenKChat('${ticker}', '${file.filename}')">
                                         <div class="file-icon">
                                             <i class="bi bi-file-earmark-text"></i>
                                         </div>
@@ -684,7 +653,262 @@ function getTenKFiles(ticker) {
         });
 }
 
-// 開啟10-K檔案
+// 開啟10-K檔案聊天室
+function openTenKChat(ticker, filename) {
+    // 檢查是否為所有檔案模式
+    const isAllFiles = filename === 'ALL';
+    
+    // 構建跳轉URL
+    const params = new URLSearchParams({
+        ticker: ticker,
+        filename: filename
+    });
+    
+    // 跳轉到10-K聊天頁面
+    const url = `tenk_chat.php?${params.toString()}`;
+    window.location.href = url;
+}
+
+// 創建10-K聊天窗口
+function createTenKChatWindow(ticker, filename, title) {
+    // 檢查是否已存在相同的聊天窗口
+    const existingWindow = document.getElementById(`tenk-chat-${ticker}-${filename.replace(/[^a-zA-Z0-9]/g, '_')}`);
+    if (existingWindow) {
+        existingWindow.style.display = 'flex';
+        return;
+    }
+
+    // 創建聊天窗口容器
+    const chatWindow = document.createElement('div');
+    chatWindow.id = `tenk-chat-${ticker}-${filename.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    chatWindow.className = 'tenk-chat-window';
+    
+    const isAllFiles = filename === 'ALL';
+    
+    chatWindow.innerHTML = `
+        <div class="tenk-chat-overlay" onclick="closeTenKChatWindow('${ticker}', '${filename}')"></div>
+        <div class="tenk-chat-container">
+            <div class="tenk-chat-header">
+                <div class="tenk-chat-title">
+                    <i class="bi bi-${isAllFiles ? 'collection' : 'file-earmark-text'}"></i>
+                    <span>${title}</span>
+                </div>
+                <button class="tenk-chat-close" onclick="closeTenKChatWindow('${ticker}', '${filename}')">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            
+            <div class="tenk-chat-content">
+                <div class="tenk-chat-messages" id="tenk-messages-${ticker}-${filename.replace(/[^a-zA-Z0-9]/g, '_')}">
+                    <div class="welcome-message">
+                        <div class="bot-avatar">
+                            <i class="bi bi-robot"></i>
+                        </div>
+                        <div class="message-content">
+                            <h5>歡迎使用 FinBot 10-K 分析</h5>
+                            <p>我可以幫您分析 ${ticker} 的${isAllFiles ? '所有' : '指定'} 10-K 財報檔案。請提出您的問題：</p>
+                            <div class="suggested-questions">
+                                <button class="suggested-btn" onclick="askTenKQuestion('${ticker}', '${filename}', '公司的主要業務和產品線有哪些？')">
+                                    主要業務
+                                </button>
+                                <button class="suggested-btn" onclick="askTenKQuestion('${ticker}', '${filename}', '最主要的風險因素是什麼？')">
+                                    風險因素
+                                </button>
+                                <button class="suggested-btn" onclick="askTenKQuestion('${ticker}', '${filename}', '財務表現和關鍵指標如何？')">
+                                    財務表現
+                                </button>
+                                <button class="suggested-btn" onclick="askTenKQuestion('${ticker}', '${filename}', '未來的發展策略和計劃是什麼？')">
+                                    未來計劃
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tenk-chat-input">
+                <div class="input-container">
+                    <textarea 
+                        id="tenk-input-${ticker}-${filename.replace(/[^a-zA-Z0-9]/g, '_')}"
+                        placeholder="請針對${isAllFiles ? '所有' : '此份'} 10-K 檔案提出您的問題..."
+                        rows="2"
+                    ></textarea>
+                    <button 
+                        id="tenk-send-${ticker}-${filename.replace(/[^a-zA-Z0-9]/g, '_')}"
+                        onclick="sendTenKQuestion('${ticker}', '${filename}')"
+                    >
+                        <i class="bi bi-send"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 添加到body
+    document.body.appendChild(chatWindow);
+    
+    // 添加Enter鍵支持
+    const inputElement = document.getElementById(`tenk-input-${ticker}-${filename.replace(/[^a-zA-Z0-9]/g, '_')}`);
+    if (inputElement) {
+        inputElement.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendTenKQuestion(ticker, filename);
+            }
+        });
+        // 自動聚焦
+        setTimeout(() => inputElement.focus(), 100);
+    }
+}
+
+// 關閉10-K聊天窗口
+function closeTenKChatWindow(ticker, filename) {
+    const windowId = `tenk-chat-${ticker}-${filename.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const chatWindow = document.getElementById(windowId);
+    if (chatWindow) {
+        chatWindow.style.display = 'none';
+    }
+}
+
+// 發送10-K問題
+function sendTenKQuestion(ticker, filename) {
+    const inputId = `tenk-input-${ticker}-${filename.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const sendBtnId = `tenk-send-${ticker}-${filename.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const messagesId = `tenk-messages-${ticker}-${filename.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    
+    const inputElement = document.getElementById(inputId);
+    const sendButton = document.getElementById(sendBtnId);
+    const messagesContainer = document.getElementById(messagesId);
+    
+    if (!inputElement || !sendButton || !messagesContainer) {
+        console.error('找不到聊天元素');
+        return;
+    }
+
+    const question = inputElement.value.trim();
+    if (!question) {
+        alert('請輸入問題');
+        return;
+    }
+
+    // 禁用輸入
+    inputElement.disabled = true;
+    sendButton.disabled = true;
+    sendButton.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+
+    // 添加用戶問題
+    addTenKMessage(messagesContainer, question, 'user');
+
+    // 清空輸入框
+    inputElement.value = '';
+
+    // 顯示機器人思考狀態
+    addTenKMessage(messagesContainer, '', 'bot', true);
+
+    // 發送請求
+    const formData = new FormData();
+    formData.append('action', 'ask_10k_question');
+    formData.append('ticker', ticker);
+    formData.append('filename', filename);
+    formData.append('question', question);
+
+    fetch('stock_qa_api.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        // 移除思考狀態
+        const thinkingMessage = messagesContainer.querySelector('.thinking-message');
+        if (thinkingMessage) {
+            thinkingMessage.remove();
+        }
+
+        if (data.success) {
+            // 添加回答
+            addTenKMessage(messagesContainer, data.answer, 'bot');
+        } else {
+            // 添加錯誤消息
+            addTenKMessage(messagesContainer, `抱歉，處理您的問題時發生錯誤：${data.error}`, 'bot', false, true);
+        }
+    })
+    .catch(error => {
+        console.error('發送10-K問題失敗:', error);
+        
+        // 移除思考狀態
+        const thinkingMessage = messagesContainer.querySelector('.thinking-message');
+        if (thinkingMessage) {
+            thinkingMessage.remove();
+        }
+        
+        addTenKMessage(messagesContainer, '網路錯誤，請稍後再試', 'bot', false, true);
+    })
+    .finally(() => {
+        // 恢復輸入狀態
+        inputElement.disabled = false;
+        sendButton.disabled = false;
+        sendButton.innerHTML = '<i class="bi bi-send"></i>';
+        inputElement.focus();
+    });
+}
+
+// 添加10-K聊天消息
+function addTenKMessage(messagesContainer, content, sender, isThinking = false, isError = false) {
+    const messageDiv = document.createElement('div');
+    
+    if (isThinking) {
+        messageDiv.className = 'chat-message bot thinking-message';
+        messageDiv.innerHTML = `
+            <div class="bot-avatar">
+                <i class="bi bi-robot"></i>
+            </div>
+            <div class="message-content">
+                <div class="thinking-animation">
+                    <span></span><span></span><span></span>
+                </div>
+                <small>FinBot 正在分析 10-K 檔案...</small>
+            </div>
+        `;
+    } else {
+        messageDiv.className = `chat-message ${sender}${isError ? ' error' : ''}`;
+        
+        if (sender === 'user') {
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    ${escapeHtml(content)}
+                </div>
+                <div class="user-avatar">
+                    <i class="bi bi-person"></i>
+                </div>
+            `;
+        } else {
+            messageDiv.innerHTML = `
+                <div class="bot-avatar">
+                    <i class="bi bi-robot"></i>
+                </div>
+                <div class="message-content">
+                    ${isError ? escapeHtml(content) : formatAnswer(content)}
+                </div>
+            `;
+        }
+    }
+    
+    messagesContainer.appendChild(messageDiv);
+    messageDiv.scrollIntoView({ behavior: 'smooth' });
+}
+
+// 提出建議的10-K問題
+function askTenKQuestion(ticker, filename, question) {
+    const inputId = `tenk-input-${ticker}-${filename.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const inputElement = document.getElementById(inputId);
+    
+    if (inputElement) {
+        inputElement.value = question;
+        sendTenKQuestion(ticker, filename);
+    }
+}
+
+// 保留原來的 openTenKFile 函數作為備用（用於查看檔案內容）
 function openTenKFile(ticker, filename) {
     // 新視窗開啟檔案檢視器
     const url = `view_10k.php?ticker=${encodeURIComponent(ticker)}&file=${encodeURIComponent(filename)}`;
