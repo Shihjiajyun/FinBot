@@ -138,6 +138,8 @@ class TenKGPTSummarizer:
             self.logger.error(f"資料庫連接失敗: {err}")
             raise
             
+
+            
     def get_pending_filings(self) -> list:
         """獲取待處理的 10-K 檔案"""
         connection = self.get_db_connection()
@@ -300,10 +302,11 @@ class TenKGPTSummarizer:
             ) VALUES (%s, %s, %s, %s, 'processing')
             """
             
+            # 直接使用原始的 company_name（現在已經是股票代號）
             cursor.execute(insert_query, (
                 filing_data['id'],
                 filing_data['file_name'],
-                filing_data['company_name'],
+                filing_data['company_name'],  # 現在 company_name 欄位直接存股票代號
                 filing_data['report_date']
             ))
             
@@ -373,7 +376,7 @@ class TenKGPTSummarizer:
         start_time = time.time()
         
         self.logger.info(f"開始處理: {filing_data['file_name']}")
-        self.logger.info(f"   公司: {filing_data['company_name']}")
+        self.logger.info(f"   股票代號: {filing_data['company_name']}")  # 現在 company_name 直接是股票代號
         self.logger.info(f"   報告日期: {filing_data['report_date']}")
         
         # 創建摘要記錄

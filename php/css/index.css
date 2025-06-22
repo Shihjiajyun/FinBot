@@ -255,54 +255,228 @@ body {
 }
 
 .message {
-    max-width: 800px;
-    margin: 0 auto;
-    width: 100%;
+    margin: 15px 0;
+    display: flex;
+    max-width: 85%;
+    animation: fadeInUp 0.3s ease-out;
+}
+
+.message.user {
+    margin-left: auto;
+    flex-direction: row-reverse;
+}
+
+.message.bot {
+    margin-right: auto;
+    flex-direction: row;
 }
 
 .message-content {
     display: flex;
-    gap: 15px;
     align-items: flex-start;
+    gap: 10px;
+    width: 100%;
 }
 
 .message.user .message-content {
-    justify-content: flex-end;
+    flex-direction: row-reverse;
 }
 
 .message-avatar {
     width: 32px;
     height: 32px;
-    border-radius: 6px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 16px;
     flex-shrink: 0;
+    margin-top: 2px;
 }
 
 .message.user .message-avatar {
     background: var(--primary-color);
+    color: white;
 }
 
 .message.bot .message-avatar {
     background: #10a37f;
+    color: white;
 }
 
 .message-text {
+    background: rgba(255, 255, 255, 0.08);
     padding: 12px 16px;
-    border-radius: 12px;
-    max-width: 70%;
-    word-wrap: break-word;
+    border-radius: 18px;
     line-height: 1.5;
+    word-wrap: break-word;
+    position: relative;
 }
 
 .message.user .message-text {
     background: var(--primary-color);
+    color: white;
+    border-bottom-right-radius: 6px;
 }
 
 .message.bot .message-text {
-    background: #343541;
+    background: rgba(255, 255, 255, 0.1);
+    color: #ececf1;
+    border-bottom-left-radius: 6px;
+}
+
+/* Markdown 樣式增強 */
+.message-text h1, .message-text h2, .message-text h3, 
+.message-text h4, .message-text h5, .message-text h6 {
+    color: #ffffff;
+    margin: 16px 0 12px 0;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.message-text h1 { 
+    font-size: 1.8em; 
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 8px;
+}
+.message-text h2 { 
+    font-size: 1.6em; 
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    padding-bottom: 6px;
+}
+.message-text h3 { font-size: 1.4em; }
+.message-text h4 { font-size: 1.2em; }
+.message-text h5 { font-size: 1.1em; }
+.message-text h6 { font-size: 1em; }
+
+.message-text ul, .message-text ol {
+    margin: 12px 0;
+    padding-left: 20px;
+}
+
+.message-text li {
+    margin: 6px 0;
+    line-height: 1.5;
+}
+
+.message-text strong, .message-text b {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.message-text em, .message-text i {
+    font-style: italic;
+    color: #c5c5d2;
+}
+
+.message-text code {
+    background: rgba(0, 0, 0, 0.3);
+    color: #f8f8f2;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+.message-text pre {
+    background: rgba(0, 0, 0, 0.4);
+    color: #f8f8f2;
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 12px 0;
+    border-left: 4px solid var(--primary-color);
+}
+
+.message-text pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.85em;
+}
+
+.message-text blockquote {
+    border-left: 4px solid var(--primary-color);
+    padding-left: 16px;
+    margin: 12px 0;
+    font-style: italic;
+    color: #c5c5d2;
+}
+
+.message-text table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.message-text th, .message-text td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.message-text th {
+    background: rgba(0, 0, 0, 0.3);
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.message-text td {
+    color: #ececf1;
+}
+
+.message-text a {
+    color: #4a9eff;
+    text-decoration: none;
+}
+
+.message-text a:hover {
+    text-decoration: underline;
+}
+
+/* 聊天訊息動畫 */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 快速跳轉按鈕 */
+.quick-jump-btn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(44, 90, 160, 0.3);
+    transition: all 0.2s ease;
+    z-index: 1000;
+    display: none;
+}
+
+.quick-jump-btn:hover {
+    background: #1e4080;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(44, 90, 160, 0.4);
+}
+
+.quick-jump-btn.show {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .input-area {
@@ -704,57 +878,6 @@ body {
     border-left-color: #28a745;
 }
 
-/* Markdown 內容樣式 */
-.message-text h1, .message-text h2, .message-text h3 {
-    color: white;
-    margin: 15px 0 10px 0;
-    font-weight: 600;
-}
-
-.message-text h1 { font-size: 1.5em; }
-.message-text h2 { font-size: 1.3em; }
-.message-text h3 { font-size: 1.1em; }
-
-.message-text ul, .message-text ol {
-    margin: 10px 0;
-    padding-left: 20px;
-}
-
-.message-text li {
-    margin: 5px 0;
-    line-height: 1.5;
-}
-
-.message-text strong {
-    color: white;
-    font-weight: 600;
-}
-
-.message-text code {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9em;
-}
-
-.message-text pre {
-    background: rgba(255, 255, 255, 0.05);
-    padding: 15px;
-    border-radius: 8px;
-    overflow-x: auto;
-    margin: 10px 0;
-    border-left: 3px solid var(--primary-color);
-}
-
-.message-text blockquote {
-    border-left: 4px solid var(--primary-color);
-    margin: 10px 0;
-    padding: 10px 15px;
-    background: rgba(44, 90, 160, 0.1);
-    border-radius: 4px;
-}
-
 /* 股票查詢按鈕樣式 */
 .stock-query-btn {
     width: 100%;
@@ -778,114 +901,340 @@ body {
 /* 股票查詢容器 */
 .stock-query-container {
     flex: 1;
-    padding: 20px;
-    overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    min-height: 0;
-    height: 100%;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
 }
 
 .stock-query-header {
+    padding: 20px 30px;
+    background: linear-gradient(135deg, var(--primary-color), #7c3aed);
+    color: white;
     text-align: center;
-    padding: 20px 0;
+    flex-shrink: 0;
 }
 
 .stock-query-header h2 {
-    color: white;
-    margin-bottom: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 600;
 }
 
-/* 股票搜尋區域 */
 .stock-search-area {
-    max-width: 600px;
-    margin: 0 auto;
-    width: 100%;
+    padding: 20px 30px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
 }
 
 .search-form {
     display: flex;
     gap: 10px;
-    margin-bottom: 30px;
+    margin-bottom: 20px;
 }
 
 .stock-input {
     flex: 1;
-    padding: 15px;
-    border: 1px solid var(--dark-border);
-    border-radius: 8px;
-    background: var(--dark-sidebar);
-    color: white;
+    padding: 12px 16px;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-color);
+    color: var(--text-color);
     font-size: 16px;
+    transition: all 0.3s ease;
 }
 
 .stock-input:focus {
     outline: none;
     border-color: var(--primary-color);
-}
-
-.stock-input::placeholder {
-    color: #8e8ea0;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
 #search-stock-btn {
-    padding: 15px 25px;
+    padding: 12px 24px;
     background: var(--primary-color);
     color: white;
     border: none;
-    border-radius: 8px;
+    border-radius: 12px;
+    font-weight: 600;
     cursor: pointer;
-    transition: background 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    transition: all 0.3s ease;
+    white-space: nowrap;
 }
 
 #search-stock-btn:hover {
-    background: #1e4080;
+    background: var(--primary-hover);
+    transform: translateY(-2px);
 }
 
-/* 熱門股票標籤 */
-.popular-stocks {
-    text-align: center;
+.popular-stocks h5 {
+    margin-bottom: 15px;
+    color: var(--text-muted);
 }
 
 .stock-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
-    justify-content: center;
+    gap: 8px;
 }
 
 .stock-tag {
-    background: var(--dark-sidebar);
-    color: white;
-    padding: 8px 16px;
+    padding: 6px 12px;
+    background: var(--border-color);
+    color: var(--text-color);
     border-radius: 20px;
     cursor: pointer;
-    transition: all 0.2s;
-    border: 1px solid var(--dark-border);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
 }
 
 .stock-tag:hover {
     background: var(--primary-color);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.stock-result-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+    background: var(--bg-color);
+}
+
+/* 股票資訊顯示區域 */
+.stock-info-section {
+    padding: 20px 30px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.stock-info-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stock-info-header h3 {
+    margin: 0;
+    color: var(--text-color);
+    font-size: 1.5rem;
+}
+
+.stock-price {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.stock-change {
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.stock-change.positive {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.stock-change.negative {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.financial-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.summary-item {
+    background: var(--bg-color);
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+}
+
+.summary-item .label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+}
+
+.summary-item .value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+/* 股票問答區域 */
+.stock-qa-section {
+    background: var(--card-bg);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    min-height: 400px;
+}
+
+.qa-header {
+    padding: 15px 30px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-color);
+}
+
+.qa-header h4 {
+    margin: 0;
+    color: var(--text-color);
+    font-size: 1.2rem;
+}
+
+.qa-history {
+    flex: 1;
+    padding: 20px 30px;
+    overflow-y: auto;
+    max-height: 400px;
+    min-height: 200px;
+}
+
+.qa-input-area {
+    padding: 15px 30px;
+    background: var(--bg-color);
+    border-top: 1px solid var(--border-color);
+}
+
+.qa-suggested-questions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.suggested-question-btn {
+    padding: 6px 12px;
+    background: var(--border-color);
+    color: var(--text-muted);
+    border: none;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.suggested-question-btn:hover {
+    background: var(--primary-color);
+    color: white;
+}
+
+.qa-input-form {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.qa-input {
+    flex: 1;
+    padding: 12px 16px;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--card-bg);
+    color: var(--text-color);
+    font-size: 14px;
+    resize: none;
+    min-height: 44px;
+    max-height: 120px;
+    transition: all 0.3s ease;
+}
+
+.qa-input:focus {
+    outline: none;
     border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.qa-submit-btn {
+    padding: 12px 16px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.qa-submit-btn:hover:not(:disabled) {
+    background: var(--primary-hover);
+    transform: translateY(-2px);
+}
+
+.qa-submit-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 快速跳轉按鈕 */
+.stock-quick-jump-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+    transition: all 0.3s ease;
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.stock-quick-jump-btn.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.stock-quick-jump-btn:hover {
+    background: var(--primary-hover);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 25px rgba(99, 102, 241, 0.4);
+}
+
+.stock-quick-jump-btn i {
+    font-size: 16px;
+    margin-bottom: 2px;
+}
+
+/* 移除之前的固定定位樣式 */
+.stock-search-area {
+    position: static;
+    top: auto;
+    left: auto;
+    right: auto;
+    z-index: auto;
+    width: auto;
+    box-shadow: none;
 }
 
 /* 股票結果區域 */
-.stock-result-area {
-    max-width: 800px;
-    margin: 0 auto;
-    width: 100%;
-}
-
 .stock-loading {
     text-align: center;
     padding: 40px;
@@ -1793,4 +2142,862 @@ body {
         width: 100%;
         max-width: 200px;
     }
+}
+
+/* === 股票問答樣式 === */
+
+.stock-qa-section {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    padding: 25px;
+    margin: 25px 0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    position: relative;
+}
+
+.qa-header {
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 15px;
+}
+
+.qa-header h4 {
+    color: #ffffff;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.3em;
+}
+
+.qa-header h4 i {
+    color: var(--primary-color);
+}
+
+.qa-history {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.qa-history::-webkit-scrollbar {
+    width: 6px;
+}
+
+.qa-history::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.qa-history::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
+
+.qa-history-header {
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.qa-history-header h6 {
+    color: #8e8ea0;
+    margin: 0;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.qa-item {
+    margin: 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.qa-item:last-child {
+    margin-bottom: 0;
+}
+
+.qa-item:hover {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    padding: 10px;
+    margin: 20px -10px;
+}
+
+.qa-item.processing {
+    opacity: 0.8;
+}
+
+.qa-item.error {
+    background: rgba(220, 53, 69, 0.1);
+    border-radius: 8px;
+    padding: 10px;
+    margin: 20px -10px;
+}
+
+.qa-question {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+}
+
+.qa-question .qa-content-wrapper {
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: flex-start;
+    gap: 10px;
+    max-width: 80%;
+}
+
+.qa-question .qa-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 16px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.qa-question .qa-bubble {
+    background: var(--primary-color);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 18px;
+    border-bottom-right-radius: 6px;
+    position: relative;
+    word-wrap: break-word;
+    line-height: 1.4;
+}
+
+.qa-answer {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.qa-answer .qa-content-wrapper {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 10px;
+    max-width: 85%;
+}
+
+.qa-answer .qa-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #10a37f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 16px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.qa-answer .qa-bubble {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ececf1;
+    padding: 12px 16px;
+    border-radius: 18px;
+    border-bottom-left-radius: 6px;
+    position: relative;
+    word-wrap: break-word;
+    line-height: 1.4;
+}
+
+.qa-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: #8e8ea0;
+}
+
+.qa-meta i {
+    font-size: 14px;
+}
+
+.qa-label {
+    font-weight: 500;
+}
+
+.cached-badge {
+    background: #28a745;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.qa-content {
+    flex: 1;
+}
+
+.qa-content.error-message {
+    color: #dc3545;
+}
+
+.thinking-animation {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.thinking-animation span {
+    width: 6px;
+    height: 6px;
+    background: #8e8ea0;
+    border-radius: 50%;
+    animation: thinking-bounce 1.4s infinite ease-in-out;
+}
+
+.thinking-animation span:nth-child(1) { animation-delay: -0.32s; }
+.thinking-animation span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes thinking-bounce {
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+    40% {
+        transform: scale(1);
+    }
+}
+
+.no-qa-history {
+    text-align: center;
+    padding: 40px 20px;
+    color: #8e8ea0;
+}
+
+.no-qa-history i {
+    display: block;
+    margin: 0 auto 15px;
+}
+
+.loading-qa-history {
+    text-align: center;
+    padding: 30px;
+    color: #8e8ea0;
+}
+
+.qa-error {
+    text-align: center;
+    padding: 20px;
+    color: #dc3545;
+}
+
+.qa-input-section {
+    border-top: 1px solid var(--dark-border);
+    padding-top: 20px;
+}
+
+.qa-input-container {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.qa-input {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--dark-border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: var(--text-primary);
+    font-size: 14px;
+    resize: none;
+    min-height: 80px;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.qa-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.qa-input::placeholder {
+    color: var(--text-muted);
+}
+
+.qa-send-btn {
+    background: var(--primary-color);
+    border: none;
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 50px;
+    transition: all 0.2s;
+}
+
+.qa-send-btn:hover:not(:disabled) {
+    background: #1e4a8c;
+    transform: translateY(-1px);
+}
+
+.qa-send-btn:disabled {
+    background: #444;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.suggested-questions {
+    margin-top: 16px;
+}
+
+.suggested-questions h6 {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+.question-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.question-tag {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--dark-border);
+    border-radius: 16px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.question-tag:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+    .stock-qa-section {
+        padding: 16px;
+        margin-top: 20px;
+    }
+    
+    .qa-history {
+        max-height: 300px;
+    }
+    
+    .qa-input-container {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .qa-send-btn {
+        align-self: flex-end;
+        min-width: 100px;
+    }
+    
+    .question-tags {
+        justify-content: center;
+    }
+    
+    .qa-meta {
+        font-size: 11px;
+    }
+    
+    .qa-content {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .qa-input {
+        min-height: 60px;
+        font-size: 13px;
+    }
+    
+    .question-tag {
+        font-size: 11px;
+        padding: 4px 8px;
+    }
+    
+    .qa-send-btn {
+        width: 100%;
+        min-width: auto;
+    }
+    
+    .qa-header h4 {
+        font-size: 16px;
+    }
+}
+
+/* 圖表相關樣式 */
+.chart-container {
+    margin: 20px 0;
+    background: #1e1e1e;
+    border-radius: 8px;
+    padding: 15px;
+    border: 1px solid #404040;
+}
+
+.chart-container canvas {
+    max-width: 100%;
+    height: auto !important;
+}
+
+/* 改進的Markdown渲染樣式 */
+.qa-content h1, .qa-content h2, .qa-content h3, 
+.qa-content h4, .qa-content h5, .qa-content h6 {
+    color: #ffffff;
+    margin: 16px 0 8px 0;
+    font-weight: 600;
+}
+
+.qa-content h1 { font-size: 1.8em; }
+.qa-content h2 { font-size: 1.6em; }
+.qa-content h3 { font-size: 1.4em; }
+.qa-content h4 { font-size: 1.2em; }
+.qa-content h5 { font-size: 1.1em; }
+.qa-content h6 { font-size: 1em; }
+
+.qa-content ul, .qa-content ol {
+    margin: 12px 0;
+    padding-left: 20px;
+    color: #e5e7eb;
+}
+
+.qa-content li {
+    margin: 6px 0;
+    line-height: 1.5;
+}
+
+.qa-content strong, .qa-content b {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.qa-content em, .qa-content i {
+    color: #d1d5db;
+    font-style: italic;
+}
+
+.qa-content code {
+    background: #374151;
+    color: #f9fafb;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+.qa-content pre {
+    background: #1f2937;
+    color: #f9fafb;
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 12px 0;
+    border: 1px solid #374151;
+}
+
+.qa-content pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.85em;
+}
+
+.qa-content blockquote {
+    border-left: 4px solid var(--primary-color);
+    margin: 16px 0;
+    padding: 8px 16px;
+    background: rgba(44, 90, 160, 0.1);
+    color: #d1d5db;
+    font-style: italic;
+}
+
+.qa-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    background: #1f2937;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.qa-content th, .qa-content td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid #374151;
+}
+
+.qa-content th {
+    background: #374151;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.qa-content td {
+    color: #e5e7eb;
+}
+
+.qa-content a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.qa-content a:hover {
+    text-decoration: underline;
+}
+
+/* 響應式圖表 */
+@media (max-width: 768px) {
+    .chart-container {
+        padding: 10px;
+        margin: 15px 0;
+    }
+    
+    .chart-container canvas {
+        height: 250px !important;
+    }
+}
+
+/* 現代化股票卡片樣式 */
+.modern-stock-card {
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+    border: 1px solid #374151;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.stock-hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.stock-identity {
+    flex: 1;
+    min-width: 200px;
+}
+
+.stock-symbol {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+}
+
+.company-name {
+    font-size: 1.25rem;
+    color: #9ca3af;
+    margin-bottom: 12px;
+    font-weight: 500;
+}
+
+.exchange-tag {
+    display: inline-block;
+    background: var(--primary-color);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.stock-pricing {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.current-price {
+    font-size: 3rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 8px;
+    line-height: 1;
+}
+
+.price-movement {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+.price-movement.positive {
+    color: #10b981;
+}
+
+.price-movement.negative {
+    color: #ef4444;
+}
+
+.change-amount {
+    font-size: 1.25rem;
+}
+
+.change-percent {
+    font-size: 1rem;
+    opacity: 0.8;
+}
+
+/* 關鍵指標網格 */
+.key-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.metric-card {
+    background: rgba(55, 65, 81, 0.5);
+    border: 1px solid #4b5563;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.metric-card:hover {
+    background: rgba(55, 65, 81, 0.8);
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(44, 90, 160, 0.2);
+}
+
+.metric-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--primary-color);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.metric-content {
+    flex: 1;
+}
+
+.metric-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 4px;
+}
+
+.metric-label {
+    font-size: 0.875rem;
+    color: #9ca3af;
+    font-weight: 500;
+}
+
+/* 次要指標 */
+.secondary-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    padding-top: 24px;
+    border-top: 1px solid #374151;
+}
+
+.secondary-metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+}
+
+.secondary-metric .label {
+    color: #9ca3af;
+    font-weight: 500;
+}
+
+.secondary-metric .value {
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 1.125rem;
+}
+
+/* 財務分析容器 */
+.financial-analysis-container {
+    background: rgba(17, 24, 39, 0.6);
+    border-radius: 16px;
+    padding: 24px;
+    border: 1px solid #374151;
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+    .stock-hero {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .stock-pricing {
+        text-align: center;
+        width: 100%;
+    }
+    
+    .stock-symbol {
+        font-size: 2rem;
+    }
+    
+    .current-price {
+        font-size: 2.5rem;
+    }
+    
+    .key-metrics-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .metric-card {
+        padding: 16px;
+    }
+    
+    .metric-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1.25rem;
+    }
+    
+    .metric-value {
+        font-size: 1.25rem;
+    }
+    
+    .secondary-metrics {
+        grid-template-columns: 1fr;
+    }
+    
+    .modern-stock-card {
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+    
+    .financial-analysis-container {
+        padding: 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .stock-symbol {
+        font-size: 1.75rem;
+    }
+    
+    .current-price {
+        font-size: 2rem;
+    }
+    
+    .key-metrics-grid {
+        gap: 12px;
+    }
+    
+    .metric-card {
+        padding: 12px;
+        gap: 12px;
+    }
+    
+    .metric-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 1.125rem;
+    }
+}
+
+/* 股票查詢頁面快速跳轉按鈕響應式 */
+.stock-quick-jump-btn {
+    padding: 10px 16px;
+    font-size: 13px;
+}
+
+/* 股票查詢頁面的快速跳轉按鈕 */
+.stock-quick-jump-btn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(44, 90, 160, 0.3);
+    transition: all 0.2s ease;
+    z-index: 1000;
+    display: none;
+}
+
+.stock-quick-jump-btn:hover {
+    background: #1e4080;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(44, 90, 160, 0.4);
+}
+
+.stock-quick-jump-btn.show {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 為股票查詢結果區域添加滾動支持 */
+#stock-result-area {
+    max-height: 80vh;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+#stock-result-area::-webkit-scrollbar {
+    width: 8px;
+}
+
+#stock-result-area::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+#stock-result-area::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+}
+
+#stock-result-area::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
 }

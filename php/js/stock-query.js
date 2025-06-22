@@ -358,68 +358,47 @@ function displayStockInfo(stockInfo, financialData, freshlyAnalyzed = false) {
 
     resultArea.innerHTML = `
         ${freshAnalysisNotice}
-        <div class="stock-info-card">
-            <div class="stock-header">
-                <div class="stock-title">
-                    <h3>${stockInfo.symbol}</h3>
-                    <h4>${stockInfo.company_name || '公司名稱'}</h4>
-                    <span class="exchange-badge">${stockInfo.exchange || 'N/A'}</span>
-                </div>
-                <div class="stock-price">
-                    <div class="current-price">$${stockInfo.current_price || 'N/A'}</div>
-                    <div class="price-change ${stockInfo.price_change >= 0 ? 'positive' : 'negative'}">
-                        ${stockInfo.price_change >= 0 ? '+' : ''}${stockInfo.price_change || 'N/A'} (${stockInfo.price_change_percent || 'N/A'}%)
-                    </div>
+        
+        <!-- 股票資訊區域 -->
+        <div class="stock-info-section">
+            <div class="stock-info-header">
+                <h3>${stockInfo.symbol} - ${stockInfo.company_name || '公司名稱'}</h3>
+                <div class="stock-price">$${stockInfo.current_price || 'N/A'}</div>
+                <div class="stock-change ${stockInfo.price_change >= 0 ? 'positive' : 'negative'}">
+                    ${stockInfo.price_change >= 0 ? '+' : ''}${stockInfo.price_change || 'N/A'} (${stockInfo.price_change_percent || 'N/A'}%)
                 </div>
             </div>
 
-            <div class="stock-metrics">
-                <div class="metric-row">
-                    <div class="metric-item">
-                        <label>市值</label>
-                        <value>${formatNumber(stockInfo.market_cap)} USD</value>
-                    </div>
-                    <div class="metric-item">
-                        <label>本益比 (PE)</label>
-                        <value>${stockInfo.pe_ratio || 'N/A'}</value>
-                    </div>
-                    <div class="metric-item">
-                        <label>每股盈餘 (EPS)</label>
-                        <value>${stockInfo.eps || 'N/A'}</value>
-                    </div>
+            <div class="financial-summary">
+                <div class="summary-item">
+                    <div class="label">市值</div>
+                    <div class="value">${formatNumber(stockInfo.market_cap)} USD</div>
                 </div>
-                
-                <div class="metric-row">
-                    <div class="metric-item">
-                        <label>股息殖利率</label>
-                        <value>${stockInfo.dividend_yield || 'N/A'}%</value>
-                    </div>
-                    <div class="metric-item">
-                        <label>52週高點</label>
-                        <value>$${stockInfo.week_52_high || 'N/A'}</value>
-                    </div>
-                    <div class="metric-item">
-                        <label>52週低點</label>
-                        <value>$${stockInfo.week_52_low || 'N/A'}</value>
-                    </div>
+                <div class="summary-item">
+                    <div class="label">本益比 (PE)</div>
+                    <div class="value">${stockInfo.pe_ratio || 'N/A'}</div>
                 </div>
-                
-                <div class="metric-row">
-                    <div class="metric-item">
-                        <label>平均成交量</label>
-                        <value>${formatNumber(stockInfo.avg_volume)}</value>
-                    </div>
-                    <div class="metric-item">
-                        <label>淨利率</label>
-                        <value>${stockInfo.profit_margin || 'N/A'}%</value>
-                    </div>
-                    <div class="metric-item">
-                        <label>總資產收益率</label>
-                        <value>${stockInfo.return_on_assets || 'N/A'}%</value>
-                    </div>
+                <div class="summary-item">
+                    <div class="label">每股盈餘 (EPS)</div>
+                    <div class="value">${stockInfo.eps || 'N/A'}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="label">股息殖利率</div>
+                    <div class="value">${stockInfo.dividend_yield || 'N/A'}%</div>
+                </div>
+                <div class="summary-item">
+                    <div class="label">52週高點</div>
+                    <div class="value">$${stockInfo.week_52_high || 'N/A'}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="label">52週低點</div>
+                    <div class="value">$${stockInfo.week_52_low || 'N/A'}</div>
                 </div>
             </div>
+        </div>
 
+        <!-- 財務分析區塊 -->
+        <div class="financial-analysis-container">
             ${financialTable}
             ${absoluteMetricsTable}
             ${balanceSheetTable}
@@ -429,11 +408,46 @@ function displayStockInfo(stockInfo, financialData, freshlyAnalyzed = false) {
                     <i class="bi bi-hourglass-split"></i> 正在載入10-K檔案...
                 </div>
             </div>
+        </div>
 
-            <div class="stock-actions">
-                <button onclick="searchStock()" class="refresh-btn">
-                    <i class="bi bi-arrow-clockwise"></i> 刷新數據
-                </button>
+        <!-- 股票問答區塊 -->
+        <div class="stock-qa-section" id="qa-section-${stockInfo.symbol}">
+            <div class="qa-header">
+                <h4><i class="bi bi-chat-square-text"></i> 針對 ${stockInfo.symbol} 的智能問答</h4>
+            </div>
+
+            <!-- 問答歷史 -->
+            <div class="qa-history" id="qa-history-${stockInfo.symbol}">
+                <div class="loading-qa-history">
+                    <i class="bi bi-hourglass-split"></i> 正在載入對話歷史...
+                </div>
+            </div>
+
+            <!-- 問題輸入區 -->
+            <div class="qa-input-area">
+                <!-- 建議問題 -->
+                <div class="qa-suggested-questions">
+                    <button class="suggested-question-btn" onclick="askSuggestedQuestion('${stockInfo.symbol}', '公司的主要業務和產品是什麼？')">主要業務</button>
+                    <button class="suggested-question-btn" onclick="askSuggestedQuestion('${stockInfo.symbol}', '最主要的風險因素有哪些？')">風險因素</button>
+                    <button class="suggested-question-btn" onclick="askSuggestedQuestion('${stockInfo.symbol}', '近年來的財務表現如何？')">財務表現</button>
+                    <button class="suggested-question-btn" onclick="askSuggestedQuestion('${stockInfo.symbol}', '競爭優勢和市場地位如何？')">競爭優勢</button>
+                </div>
+                
+                <form class="qa-input-form" onsubmit="return false;">
+                    <textarea 
+                        id="qa-question-input-${stockInfo.symbol}" 
+                        class="qa-input" 
+                        placeholder="請針對 ${stockInfo.symbol} 提出您的問題..."
+                        rows="2"
+                    ></textarea>
+                    <button 
+                        type="button"
+                        class="qa-submit-btn" 
+                        onclick="askStockQuestion('${stockInfo.symbol}')"
+                    >
+                        <i class="bi bi-send"></i>
+                    </button>
+                </form>
             </div>
         </div>
     `;
@@ -446,6 +460,147 @@ function displayStockInfo(stockInfo, financialData, freshlyAnalyzed = false) {
     }).catch(error => {
         console.error('❌ getTenKFiles 失敗:', error);
     });
+
+    // 載入問答歷史
+    loadStockQAHistory(stockInfo.symbol);
+    
+    // 記錄到股票查詢歷史
+    addStockToHistory(stockInfo.symbol, stockInfo.company_name);
+}
+
+// 添加股票到查詢歷史
+function addStockToHistory(ticker, companyName) {
+    const historyContainer = document.getElementById('chat-history');
+    if (!historyContainer) return;
+    
+    // 檢查是否已存在
+    const existingItems = historyContainer.querySelectorAll('.history-item');
+    let existingItem = null;
+    
+    existingItems.forEach(item => {
+        const stockSymbol = item.dataset.stockSymbol;
+        if (stockSymbol === ticker) {
+            existingItem = item;
+        }
+    });
+    
+    // 如果已存在，移到頂部
+    if (existingItem) {
+        historyContainer.removeChild(existingItem);
+    }
+    
+    // 創建新的歷史項目
+    const historyItem = document.createElement('div');
+    historyItem.className = 'history-item active';
+    historyItem.dataset.stockSymbol = ticker;
+    historyItem.innerHTML = `
+        <div class="history-content" onclick="loadStockFromHistory('${ticker}')">
+            <i class="bi bi-graph-up"></i>
+            <div class="question-preview">
+                <div style="font-weight: 500;">${ticker}</div>
+                <div style="font-size: 12px; color: #8e8ea0; margin-top: 2px;">
+                    ${companyName || '股票查詢'}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 移除其他項目的活躍狀態
+    existingItems.forEach(item => {
+        item.classList.remove('active');
+    });
+    
+    // 添加到頂部
+    if (historyContainer.firstChild) {
+        historyContainer.insertBefore(historyItem, historyContainer.firstChild);
+    } else {
+        historyContainer.appendChild(historyItem);
+    }
+    
+    // 保存到localStorage
+    saveStockHistory(ticker, companyName);
+}
+
+// 從歷史記錄載入股票
+function loadStockFromHistory(ticker) {
+    // 設置輸入框
+    const stockInput = document.getElementById('stock-ticker-input');
+    if (stockInput) {
+        stockInput.value = ticker;
+    }
+    
+    // 切換到股票查詢界面
+    switchToStockQuery();
+    
+    // 搜索股票
+    searchStock();
+    
+    // 更新歷史項目的活躍狀態
+    document.querySelectorAll('.history-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    
+    // 標記當前選中的項目
+    const currentItem = document.querySelector(`[data-stock-symbol="${ticker}"]`);
+    if (currentItem) {
+        currentItem.classList.add('active');
+    }
+}
+
+// 保存股票歷史到localStorage
+function saveStockHistory(ticker, companyName) {
+    let stockHistory = JSON.parse(localStorage.getItem('stockQueryHistory') || '[]');
+    
+    // 移除已存在的記錄
+    stockHistory = stockHistory.filter(item => item.ticker !== ticker);
+    
+    // 添加到開頭
+    stockHistory.unshift({
+        ticker: ticker,
+        companyName: companyName,
+        timestamp: new Date().toISOString()
+    });
+    
+    // 限制記錄數量
+    stockHistory = stockHistory.slice(0, 20);
+    
+    localStorage.setItem('stockQueryHistory', JSON.stringify(stockHistory));
+}
+
+// 載入股票歷史
+function loadStockHistory() {
+    const historyContainer = document.getElementById('chat-history');
+    if (!historyContainer) return;
+    
+    const stockHistory = JSON.parse(localStorage.getItem('stockQueryHistory') || '[]');
+    
+    if (stockHistory.length === 0) {
+        historyContainer.innerHTML = `
+            <div class="text-center" style="color: #8e8ea0; padding: 20px; font-size: 14px;">
+                暫無股票查詢記錄<br>
+                <small style="font-size: 12px;">點擊「股票查詢」開始查詢</small>
+            </div>
+        `;
+        return;
+    }
+    
+    historyContainer.innerHTML = `
+        <div class="mb-2" style="color: #8e8ea0; font-size: 12px; padding: 0 12px;">
+            最近查詢
+        </div>
+    ` + stockHistory.map(item => `
+        <div class="history-item" data-stock-symbol="${item.ticker}">
+            <div class="history-content" onclick="loadStockFromHistory('${item.ticker}')">
+                <i class="bi bi-graph-up"></i>
+                <div class="question-preview">
+                    <div style="font-weight: 500;">${item.ticker}</div>
+                    <div style="font-size: 12px; color: #8e8ea0; margin-top: 2px;">
+                        ${item.companyName || '股票查詢'}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
 }
 
 // 獲取10-K檔案列表
@@ -538,12 +693,7 @@ function openTenKFile(ticker, filename) {
 
 // 切換到股票查詢界面
 function switchToStockQuery() {
-    // 隱藏聊天界面和輸入區域
-    document.getElementById('chat-container').style.display = 'none';
-    document.getElementById('preset-questions').style.display = 'none';
-    document.getElementById('input-area').style.display = 'none';
-
-    // 顯示股票查詢界面
+    // 顯示股票查詢界面（移除聊天相關元素引用）
     document.getElementById('stock-query-container').style.display = 'block';
 
     // 移除歷史記錄的活躍狀態
@@ -551,8 +701,10 @@ function switchToStockQuery() {
         item.classList.remove('active');
     });
 
-    // 清空當前對話ID
-    currentConversationId = null;
+    // 清空當前對話ID，確保新的股票查詢不會影響對話歷史
+    if (typeof currentConversationId !== 'undefined') {
+        currentConversationId = null;
+    }
 }
 
 // 為股票查詢輸入框添加Enter鍵支持
@@ -566,6 +718,17 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
+    // 為問答輸入框添加事件監聽器 (使用事件委託)
+    document.addEventListener('keydown', function(e) {
+        if (e.target.matches('[id^="qa-question-input-"]') && e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            const tickerMatch = e.target.id.match(/qa-question-input-(.+)/);
+            if (tickerMatch) {
+                askStockQuestion(tickerMatch[1]);
+            }
+        }
+    });
 });
 
 // 啟動背景分析
@@ -731,4 +894,487 @@ function simulateAnalysisProgress() {
         }, 3000); // 每步持續3秒
         
     }, 100); // 立即開始第一步
-} 
+}
+
+// === 股票問答功能 ===
+
+// 載入股票問答歷史
+function loadStockQAHistory(ticker) {
+    console.log('🔄 載入股票問答歷史:', ticker);
+    
+    const historyContainer = document.getElementById(`qa-history-${ticker}`);
+    if (!historyContainer) {
+        console.error('找不到歷史容器:', `qa-history-${ticker}`);
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('action', 'get_stock_qa_history');
+    formData.append('ticker', ticker);
+
+    fetch('stock_qa_api.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            displayQAHistory(ticker, data.qa_history);
+        } else {
+            historyContainer.innerHTML = `
+                <div class="no-qa-history">
+                    <i class="bi bi-chat-left-text" style="font-size: 2rem; color: #8e8ea0; margin-bottom: 10px;"></i>
+                    <p>還沒有關於 ${ticker} 的問答記錄</p>
+                    <small>開始提問來建立對話歷史！</small>
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('載入問答歷史失敗:', error);
+        historyContainer.innerHTML = `
+            <div class="qa-error">
+                <i class="bi bi-exclamation-triangle"></i>
+                <p>載入對話歷史失敗</p>
+            </div>
+        `;
+    });
+}
+
+// 顯示問答歷史
+function displayQAHistory(ticker, qaHistory) {
+    const historyContainer = document.getElementById(`qa-history-${ticker}`);
+    if (!historyContainer) return;
+
+    if (!qaHistory || qaHistory.length === 0) {
+        historyContainer.innerHTML = `
+            <div class="no-qa-history">
+                <i class="bi bi-chat-left-text" style="font-size: 2rem; color: #8e8ea0; margin-bottom: 10px;"></i>
+                <p>還沒有關於 ${ticker} 的問答記錄</p>
+                <small>開始提問來建立對話歷史！</small>
+            </div>
+        `;
+        return;
+    }
+
+    let historyHtml = `
+        <div class="qa-history-header">
+            <h6><i class="bi bi-clock-history"></i> 對話歷史 (${qaHistory.length} 個問答)</h6>
+        </div>
+    `;
+
+    qaHistory.forEach((qa, index) => {
+        historyHtml += `
+            <div class="qa-item" data-qa-id="${qa.id}">
+                <div class="qa-question">
+                    <div class="qa-content-wrapper">
+                        <div class="qa-avatar">
+                            <i class="bi bi-person"></i>
+                        </div>
+                        <div class="qa-bubble">
+                            <div class="qa-meta">
+                                <span class="qa-time">${formatQATime(qa.created_at)}</span>
+                            </div>
+                            ${escapeHtml(qa.question)}
+                        </div>
+                    </div>
+                </div>
+                <div class="qa-answer">
+                    <div class="qa-content-wrapper">
+                        <div class="qa-avatar">
+                            <i class="bi bi-robot"></i>
+                        </div>
+                        <div class="qa-bubble">
+                            <div class="qa-meta">
+                                <span class="qa-label">FinBot 回答</span>
+                                ${qa.is_cached ? '<span class="cached-badge">快取回答</span>' : ''}
+                                <span class="qa-time">${formatQATime(qa.created_at)}</span>
+                            </div>
+                            ${formatAnswer(qa.answer)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    historyContainer.innerHTML = historyHtml;
+}
+
+// 提出股票問題
+function askStockQuestion(ticker) {
+    const inputElement = document.getElementById(`qa-question-input-${ticker}`);
+    const sendButton = document.getElementById(`qa-send-btn-${ticker}`);
+    
+    if (!inputElement || !sendButton) {
+        console.error('找不到輸入元素');
+        return;
+    }
+
+    const question = inputElement.value.trim();
+    if (!question) {
+        alert('請輸入問題');
+        return;
+    }
+
+    // 開始處理狀態
+    sendButton.disabled = true;
+    sendButton.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+    inputElement.disabled = true;
+
+    // 在歷史區域添加問題
+    addQuestionToHistory(ticker, question);
+
+    const formData = new FormData();
+    formData.append('action', 'ask_stock_question');
+    formData.append('ticker', ticker);
+    formData.append('question', question);
+
+    fetch('stock_qa_api.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 添加回答到歷史
+            addAnswerToHistory(ticker, data.answer, data.is_cached, data.question_id);
+            
+            // 清空輸入框
+            inputElement.value = '';
+        } else {
+            // 顯示錯誤
+            addErrorToHistory(ticker, data.error);
+        }
+    })
+    .catch(error => {
+        console.error('提問失敗:', error);
+        addErrorToHistory(ticker, '網路錯誤，請稍後再試');
+    })
+    .finally(() => {
+        // 恢復輸入狀態
+        sendButton.disabled = false;
+        sendButton.innerHTML = '<i class="bi bi-send"></i>';
+        inputElement.disabled = false;
+        inputElement.focus();
+    });
+}
+
+// 提出建議問題
+function askSuggestedQuestion(ticker, question) {
+    const inputElement = document.getElementById(`qa-question-input-${ticker}`);
+    if (inputElement) {
+        inputElement.value = question;
+        askStockQuestion(ticker);
+    }
+}
+
+// 添加問題到歷史 - 使用新的左右對話佈局
+function addQuestionToHistory(ticker, question) {
+    const historyContainer = document.getElementById(`qa-history-${ticker}`);
+    if (!historyContainer) return;
+
+    // 如果是空歷史，先清空
+    const noHistory = historyContainer.querySelector('.no-qa-history');
+    if (noHistory) {
+        historyContainer.innerHTML = `
+            <div class="qa-history-header">
+                <h6><i class="bi bi-clock-history"></i> 對話歷史</h6>
+            </div>
+        `;
+    }
+
+    const qaItem = document.createElement('div');
+    qaItem.className = 'qa-item processing';
+    qaItem.innerHTML = `
+        <div class="qa-question">
+            <div class="qa-content-wrapper">
+                <div class="qa-avatar">
+                    <i class="bi bi-person"></i>
+                </div>
+                <div class="qa-bubble">
+                    <div class="qa-meta">
+                        <span class="qa-time">剛剛</span>
+                    </div>
+                    ${escapeHtml(question)}
+                </div>
+            </div>
+        </div>
+        <div class="qa-answer">
+            <div class="qa-content-wrapper">
+                <div class="qa-avatar">
+                    <i class="bi bi-robot"></i>
+                </div>
+                <div class="qa-bubble">
+                    <div class="qa-meta">
+                        <span class="qa-label">FinBot 正在分析中...</span>
+                    </div>
+                    <div class="thinking-animation">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    historyContainer.appendChild(qaItem);
+    qaItem.scrollIntoView({ behavior: 'smooth' });
+}
+
+// 添加回答到歷史 - 使用新的左右對話佈局
+function addAnswerToHistory(ticker, answer, isCached, questionId) {
+    const historyContainer = document.getElementById(`qa-history-${ticker}`);
+    if (!historyContainer) return;
+
+    const processingItem = historyContainer.querySelector('.qa-item.processing');
+    if (processingItem) {
+        processingItem.classList.remove('processing');
+        
+        const answerBubble = processingItem.querySelector('.qa-answer .qa-bubble');
+        answerBubble.innerHTML = `
+            <div class="qa-meta">
+                <span class="qa-label">FinBot 回答</span>
+                ${isCached ? '<span class="cached-badge">快取回答</span>' : ''}
+                <span class="qa-time">剛剛</span>
+            </div>
+            ${formatAnswer(answer)}
+        `;
+        
+        answerBubble.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+// 添加錯誤到歷史 - 使用新的左右對話佈局
+function addErrorToHistory(ticker, error) {
+    const historyContainer = document.getElementById(`qa-history-${ticker}`);
+    if (!historyContainer) return;
+
+    const processingItem = historyContainer.querySelector('.qa-item.processing');
+    if (processingItem) {
+        processingItem.classList.remove('processing');
+        processingItem.classList.add('error');
+        
+        const answerBubble = processingItem.querySelector('.qa-answer .qa-bubble');
+        answerBubble.innerHTML = `
+            <div class="qa-meta">
+                <span class="qa-label">錯誤</span>
+            </div>
+            <div class="qa-content error-message">${escapeHtml(error)}</div>
+        `;
+    }
+}
+
+// 輔助函數
+function formatQATime(timestamp) {
+    const date = new Date(timestamp);
+    // 修正時區問題 - 加8小時
+    date.setHours(date.getHours() + 8);
+    
+    const now = new Date();
+    const diffMinutes = Math.floor((now - date) / (1000 * 60));
+    
+    if (diffMinutes < 1) return '剛剛';
+    if (diffMinutes < 60) return `${diffMinutes} 分鐘前`;
+    if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)} 小時前`;
+    return date.toLocaleDateString('zh-TW');
+}
+
+function formatAnswer(answer) {
+    // 檢查是否包含圖表數據
+    const chartRegex = /```chart\s*([\s\S]*?)\s*```/g;
+    const charts = [];
+    let match;
+    
+    // 提取所有圖表數據
+    while ((match = chartRegex.exec(answer)) !== null) {
+        try {
+            const chartData = JSON.parse(match[1]);
+            charts.push(chartData);
+        } catch (e) {
+            console.error('圖表數據解析錯誤:', e);
+        }
+    }
+    
+    // 移除圖表數據標記，保留純文字內容
+    let cleanAnswer = answer.replace(chartRegex, '');
+    
+    // 初始化並使用markdown-it渲染Markdown內容
+    if (typeof markdownit !== 'undefined') {
+        // 創建新的markdown-it實例
+        const md = markdownit({
+            html: true,
+            linkify: true,
+            typographer: true,
+            breaks: true
+        });
+        
+        cleanAnswer = md.render(cleanAnswer);
+    } else if (typeof window.md !== 'undefined') {
+        // 使用已存在的實例
+        cleanAnswer = window.md.render(cleanAnswer);
+    } else {
+        // 如果沒有markdown-it，手動處理基本Markdown
+        cleanAnswer = escapeHtml(cleanAnswer)
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`(.*?)`/g, '<code>$1</code>')
+            .replace(/^#{6}\s(.+)$/gm, '<h6>$1</h6>')
+            .replace(/^#{5}\s(.+)$/gm, '<h5>$1</h5>')
+            .replace(/^#{4}\s(.+)$/gm, '<h4>$1</h4>')
+            .replace(/^#{3}\s(.+)$/gm, '<h3>$1</h3>')
+            .replace(/^#{2}\s(.+)$/gm, '<h2>$1</h2>')
+            .replace(/^#{1}\s(.+)$/gm, '<h1>$1</h1>')
+            .replace(/^\d+\.\s(.+)$/gm, '<li>$1</li>')
+            .replace(/^-\s(.+)$/gm, '<li>$1</li>')
+            .replace(/\n/g, '<br>');
+        
+        // 包裝列表項目
+        cleanAnswer = cleanAnswer.replace(/(<li>.*?<\/li>)/gs, '<ul>$1</ul>');
+    }
+    
+    // 添加圖表容器
+    if (charts.length > 0) {
+        charts.forEach((chartData, index) => {
+            const chartId = `chart-${Date.now()}-${index}`;
+            cleanAnswer += `<div class="chart-container" style="margin: 20px 0; background: #1e1e1e; border-radius: 8px; padding: 15px;">
+                <canvas id="${chartId}" width="400" height="200"></canvas>
+            </div>`;
+            
+            // 延遲渲染圖表，確保DOM已更新
+            setTimeout(() => {
+                renderChart(chartId, chartData);
+            }, 100);
+        });
+    }
+    
+    return cleanAnswer;
+}
+
+function renderChart(canvasId, chartData) {
+    // 檢查是否有Chart.js庫
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js 庫未載入');
+        return;
+    }
+    
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+        console.error('找不到圖表容器:', canvasId);
+        return;
+    }
+    
+    try {
+        new Chart(canvas, {
+            type: chartData.type || 'line',
+            data: chartData.data,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: !!chartData.title,
+                        text: chartData.title || '',
+                        color: '#ffffff'
+                    },
+                    legend: {
+                        labels: {
+                            color: '#ffffff'
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: '#ffffff'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#ffffff'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                },
+                ...chartData.options
+            }
+        });
+    } catch (error) {
+        console.error('圖表渲染錯誤:', error);
+        canvas.parentElement.innerHTML = `<p style="color: #dc3545; text-align: center;">圖表載入失敗</p>`;
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 快速跳轉到問答輸入區域
+function scrollToStockQAInput(ticker) {
+    const qaSection = document.getElementById(`qa-section-${ticker}`);
+    const inputElement = document.getElementById(`qa-question-input-${ticker}`);
+    
+    if (qaSection) {
+        qaSection.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        
+        // 聚焦到輸入框
+        setTimeout(() => {
+            if (inputElement) {
+                inputElement.focus();
+            }
+        }, 500);
+    }
+}
+
+// 監控股票結果區域滾動，控制快速跳轉按鈕顯示
+function initStockScrollMonitoring() {
+    const stockResultArea = document.getElementById('stock-result-area');
+    const quickJumpBtn = document.getElementById('stock-quick-jump-btn');
+    
+    if (stockResultArea && quickJumpBtn) {
+        stockResultArea.addEventListener('scroll', function() {
+            const scrollTop = this.scrollTop;
+            const scrollHeight = this.scrollHeight;
+            const clientHeight = this.clientHeight;
+            
+            // 檢查是否有問答區域存在，且滾動距離超過視窗高度一半
+            const qaSection = document.querySelector('.stock-qa-section');
+            if (qaSection && scrollTop > clientHeight / 2) {
+                quickJumpBtn.classList.add('show');
+            } else {
+                quickJumpBtn.classList.remove('show');
+            }
+        });
+    }
+}
+
+// 全局快速跳轉函數
+function scrollToCurrentStockQA() {
+    // 找到當前顯示的股票問答區域
+    const qaSection = document.querySelector('.stock-qa-section');
+    const stockResultArea = document.getElementById('stock-result-area');
+    
+    if (qaSection && stockResultArea) {
+        // 滾動到問答區域
+        qaSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+        // 聚焦到輸入框
+        setTimeout(() => {
+            const inputElement = qaSection.querySelector('textarea');
+            if (inputElement) {
+                inputElement.focus();
+            }
+        }, 500);
+    }
+}
+
+// 在頁面載入時初始化滾動監控
+document.addEventListener('DOMContentLoaded', function() {
+    initStockScrollMonitoring();
+}); 

@@ -8,43 +8,60 @@ const md = window.markdownit({
     typographer: true
 });
 
-// 載入對話歷史
+// 載入股票查詢歷史（替代對話歷史）
 function loadConversations() {
-    fetch('api_improved.php?action=get_conversations')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const historyContainer = document.getElementById('chat-history');
-                if (data.conversations.length === 0) {
-                    historyContainer.innerHTML = `
-                        <div class="text-center" style="color: #8e8ea0; padding: 20px; font-size: 14px;">
-                            暫無對話記錄
-                        </div>
-                    `;
-                } else {
-                    historyContainer.innerHTML = `
-                        <div class="mb-2" style="color: #8e8ea0; font-size: 12px; padding: 0 12px;">
-                            最近對話
-                        </div>
-                    ` + data.conversations.map(conv => `
-                        <div class="history-item" data-conversation-id="${conv.id}">
-                            <div class="history-content" onclick="loadConversation(${conv.id})">
-                                <i class="bi bi-chat-dots"></i>
-                                <div class="question-preview" id="conv-title-${conv.id}">
-                                    ${conv.title || (conv.last_question ? conv.last_question.substring(0, 30) + '...' : '新對話')}
-                                </div>
-                            </div>
-                            <div class="history-actions">
-                                <button class="edit-conv-btn" onclick="editConversationTitle(${conv.id}, '${(conv.title || '新對話').replace(/'/g, "\\'")}')">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
-                            </div>
-                        </div>
-                    `).join('');
-                }
+    // 直接載入股票歷史，不再載入對話歷史
+    if (typeof loadStockHistory === 'function') {
+        loadStockHistory();
+    } else {
+        // 如果loadStockHistory函數還沒載入，顯示提示
+        const historyContainer = document.getElementById('chat-history');
+        if (historyContainer) {
+            historyContainer.innerHTML = `
+                <div class="text-center" style="color: #8e8ea0; padding: 20px; font-size: 14px;">
+                    暫無股票查詢記錄<br>
+                    <small style="font-size: 12px;">點擊「股票查詢」開始查詢</small>
+                </div>
+            `;
+        }
+    }
+}
+
+// 快速跳轉到輸入區域
+function scrollToInput() {
+    const inputArea = document.getElementById('input-area');
+    if (inputArea) {
+        inputArea.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        
+        // 聚焦到輸入框
+        setTimeout(() => {
+            const questionInput = document.getElementById('question-input');
+            if (questionInput) {
+                questionInput.focus();
             }
-        })
-        .catch(err => console.error('載入對話失敗:', err));
+        }, 500);
+    }
+}
+
+// 監控聊天容器滾動，控制快速跳轉按鈕顯示
+function initScrollMonitoring() {
+    const chatContainer = document.getElementById('chat-container');
+    const quickJumpBtn = document.getElementById('quick-jump-btn');
+    
+    if (chatContainer && quickJumpBtn) {
+        chatContainer.addEventListener('scroll', function() {
+            const scrollTop = this.scrollTop;
+            const scrollHeight = this.scrollHeight;
+            const clientHeight = this.clientHeight;
+            
+            // 如果滾動超過一定距離，顯示快速跳轉按鈕
+            if (scrollHeight - scrollTop - clientHeight > 200) {
+                quickJumpBtn.classList.add('show');
+            } else {
+                quickJumpBtn.classList.remove('show');
+            }
+        });
+    }
 }
 
 // 發送問題
@@ -220,140 +237,183 @@ function resetLoadingSteps() {
     document.getElementById('loading-text').textContent = '正在分析您的問題並搜尋相關財報數據';
 }
 
+// 開始新對話 - 重新設計為開始新的聊天會話
 function startNewChat() {
     currentConversationId = null;
-
-    // 隱藏股票查詢界面
-    document.getElementById('stock-query-container').style.display = 'none';
-
-    // 顯示聊天界面和輸入區域
+    
+    // 清空聊天容器
+    const chatContainer = document.getElementById('chat-container');
+    if (chatContainer) {
+        chatContainer.innerHTML = `
+            <!-- 快速跳轉按鈕 -->
+            <button class="quick-jump-btn" id="quick-jump-btn" onclick="scrollToInput()">
+                <i class="bi bi-arrow-down"></i>
+                快速提問
+            </button>
+            
+            <div class="welcome-message" id="welcome-message">
+                <i class="bi bi-robot" style="font-size: 4rem; color: var(--primary-color); margin-bottom: 20px;"></i>
+                <h2>歡迎使用 FinBot</h2>
+                <p style="color: #8e8ea0; margin: 20px 0;">
+                    我是您的財務報表分析助手，可以幫您分析任何上市公司的財務狀況。
+                    <br>試著問我一些問題吧！
+                </p>
+                <div class="example-grid">
+                    <div class="example-question" onclick="askExample('[AAPL] 2023年的營收表現如何？')">
+                        <i class="bi bi-graph-up"></i>
+                        <div style="margin-top: 8px; font-size: 14px;">[AAPL] 2023年的營收表現如何？</div>
+                    </div>
+                    <div class="example-question" onclick="askExample('[TSLA] 最新季度的毛利率是多少？')">
+                        <i class="bi bi-percent"></i>
+                        <div style="margin-top: 8px; font-size: 14px;">[TSLA] 最新季度的毛利率是多少？</div>
+                    </div>
+                    <div class="example-question" onclick="askExample('[MSFT] 債務狀況如何？')">
+                        <i class="bi bi-bank"></i>
+                        <div style="margin-top: 8px; font-size: 14px;">[MSFT] 債務狀況如何？</div>
+                    </div>
+                    <div class="example-question" onclick="askExample('[AMZN] 現金流狀況怎麼樣？')">
+                        <i class="bi bi-cash-stack"></i>
+                        <div style="margin-top: 8px; font-size: 14px;">[AMZN] 現金流狀況怎麼樣？</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // 顯示聊天界面
     document.getElementById('chat-container').style.display = 'flex';
     document.getElementById('input-area').style.display = 'block';
-
-    document.getElementById('chat-container').innerHTML = `
-        <div class="welcome-message" id="welcome-message">
-            <i class="bi bi-robot" style="font-size: 4rem; color: var(--primary-color); margin-bottom: 20px;"></i>
-            <h2>開始新對話</h2>
-            <p style="color: #8e8ea0;">有什麼財務問題想要了解的嗎？</p>
-        </div>
-    `;
-
-    // 顯示預設問題
     document.getElementById('preset-questions').style.display = 'flex';
-
-    // 移除活躍狀態
+    
+    // 隱藏股票查詢界面
+    document.getElementById('stock-query-container').style.display = 'none';
+    
+    // 移除歷史記錄的活躍狀態
     document.querySelectorAll('.history-item').forEach(item => {
         item.classList.remove('active');
     });
+    
+    // 重新初始化滾動監控
+    initScrollMonitoring();
 }
 
+// 載入對話
 function loadConversation(conversationId) {
     currentConversationId = conversationId;
 
-    // 隱藏股票查詢界面，顯示聊天界面
-    document.getElementById('stock-query-container').style.display = 'none';
-    document.getElementById('chat-container').style.display = 'flex';
-    document.getElementById('input-area').style.display = 'block';
-
-    // 標記為活躍
-    document.querySelectorAll('.history-item').forEach(item => {
-        item.classList.remove('active');
-    });
-    document.querySelector(`[data-conversation-id="${conversationId}"]`).classList.add('active');
-
-    // 隱藏歡迎訊息和預設問題
-    const welcomeMessage = document.getElementById('welcome-message');
-    const presetQuestions = document.getElementById('preset-questions');
-    if (welcomeMessage) welcomeMessage.style.display = 'none';
-    if (presetQuestions) presetQuestions.style.display = 'none';
-
-    // 載入對話內容
-    fetch(`api_improved.php?action=get_conversation&id=${conversationId}`)
+    fetch('api_improved.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `action=get_conversation&conversation_id=${conversationId}`
+        })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                const chatContainer = document.getElementById('chat-container');
-                chatContainer.innerHTML = '';
+                // 顯示聊天界面
+                document.getElementById('chat-container').style.display = 'flex';
+                document.getElementById('input-area').style.display = 'block';
+                document.getElementById('preset-questions').style.display = 'none';
+                
+                // 隱藏股票查詢界面和歡迎訊息
+                document.getElementById('stock-query-container').style.display = 'none';
+                document.getElementById('welcome-message').style.display = 'none';
 
-                // 顯示所有訊息
-                data.messages.forEach(msg => {
-                    addMessage(msg.question, 'user');
-                    addMessage(msg.answer, 'bot');
+                // 清空並重新填充聊天容器
+                const chatContainer = document.getElementById('chat-container');
+                chatContainer.innerHTML = `
+                    <button class="quick-jump-btn" id="quick-jump-btn" onclick="scrollToInput()">
+                        <i class="bi bi-arrow-down"></i>
+                        快速提問
+                    </button>
+                `;
+
+                // 載入對話內容
+                data.messages.forEach(message => {
+                    addMessage(message.content, message.role);
                 });
+                
+                // 重新初始化滾動監控
+                initScrollMonitoring();
             }
         })
-        .catch(err => console.error('載入對話錯誤:', err));
+        .catch(error => {
+            console.error('載入對話錯誤:', error);
+        });
 }
 
 function askExample(question) {
-    document.getElementById('question-input').value = question;
+    const input = document.getElementById('question-input');
+    input.value = question;
     document.getElementById('question-form').dispatchEvent(new Event('submit'));
 }
 
 function editConversationTitle(conversationId, currentTitle) {
-    // 防止事件冒泡
-    event.stopPropagation();
-
-    const newTitle = prompt('請輸入新的對話室名稱:', currentTitle);
+    const newTitle = prompt('修改對話標題:', currentTitle);
     if (newTitle && newTitle !== currentTitle) {
-        const formData = new FormData();
-        formData.append('action', 'rename_conversation');
-        formData.append('conversation_id', conversationId);
-        formData.append('title', newTitle);
-
         fetch('api_improved.php', {
                 method: 'POST',
-                body: formData
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `action=update_conversation_title&conversation_id=${conversationId}&title=${encodeURIComponent(newTitle)}`
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // 更新UI中的標題
-                    document.getElementById(`conv-title-${conversationId}`).textContent = newTitle;
-                    alert('對話室名稱已更新');
-                } else {
-                    alert('更新失敗，請稍後再試');
+                    loadConversations();
                 }
             })
             .catch(error => {
-                console.error('更新錯誤:', error);
-                alert('更新失敗，請稍後再試');
+                console.error('更新標題錯誤:', error);
             });
     }
 }
 
-// UI相關函數
 function toggleSidebar() {
     document.querySelector('.sidebar').classList.toggle('show');
 }
 
-// 自動調整輸入框高度
 function initInputArea() {
-    const input = document.getElementById('question-input');
-    input.addEventListener('input', function() {
-        this.style.height = '60px';
-        this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+    const textarea = document.getElementById('question-input');
+    if (textarea) {
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = this.scrollHeight + 'px';
+        });
 
-        // 如果內容超出最大高度，顯示滾動條
-        if (this.scrollHeight > 150) {
-            this.style.overflowY = 'auto';
-        } else {
-            this.style.overflowY = 'hidden';
-        }
-    });
-
-    // Enter 鍵發送（Shift+Enter 換行）
-    input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            document.getElementById('question-form').dispatchEvent(new Event('submit'));
-        }
-    });
+        textarea.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                document.getElementById('question-form').dispatchEvent(new Event('submit'));
+            }
+        });
+    }
 }
 
-// 初始化聊天功能
+// 修正時間顯示 - 加8小時
+function formatTimeWithOffset(timestamp) {
+    const date = new Date(timestamp);
+    date.setHours(date.getHours() + 8); // 加8小時修正時區
+    
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return '剛剛';
+    if (diffMins < 60) return `${diffMins} 分鐘前`;
+    if (diffHours < 24) return `${diffHours} 小時前`;
+    if (diffDays < 7) return `${diffDays} 天前`;
+    
+    return date.toLocaleDateString('zh-TW');
+}
+
 function initChat() {
     loadConversations();
     initQuestionForm();
     initInputArea();
+    initScrollMonitoring();
 } 
