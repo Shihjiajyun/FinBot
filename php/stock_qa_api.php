@@ -17,15 +17,20 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $action = $_POST['action'] ?? '';
 $ticker = strtoupper(trim($_POST['ticker'] ?? ''));
 
-if (empty($ticker)) {
-    echo json_encode(['success' => false, 'error' => '股票代號不能為空']);
-    exit;
-}
+// 某些操作不需要股票代號
+$actionsWithoutTicker = ['get_conversation_history', 'get_conversation_messages'];
 
-// 驗證股票代號格式
-if (!preg_match('/^[A-Z0-9]{1,10}$/', $ticker)) {
-    echo json_encode(['success' => false, 'error' => '股票代號格式錯誤']);
-    exit;
+if (!in_array($action, $actionsWithoutTicker)) {
+    if (empty($ticker)) {
+        echo json_encode(['success' => false, 'error' => '股票代號不能為空']);
+        exit;
+    }
+
+    // 驗證股票代號格式
+    if (!preg_match('/^[A-Z0-9]{1,10}$/', $ticker)) {
+        echo json_encode(['success' => false, 'error' => '股票代號格式錯誤']);
+        exit;
+    }
 }
 
 try {
@@ -43,6 +48,14 @@ try {
 
         case 'ask_10k_question':
             ask10KQuestion($pdo, $ticker);
+            break;
+
+        case 'get_conversation_history':
+            getConversationHistory($pdo);
+            break;
+
+        case 'get_conversation_messages':
+            getConversationMessages($pdo);
             break;
 
         default:
@@ -494,6 +507,11 @@ function ask10KQuestion($pdo, $ticker)
         return;
     }
 
+    // 處理從對話歷史點擊進入的情況，將中文檔案名轉換為系統識別的格式
+    if ($filename === '所有10K檔案') {
+        $filename = 'ALL';
+    }
+
     try {
         // 1. 檢查是否有相同問題的快取答案
         $cacheKey = $ticker . '_' . $filename . '_' . md5($question);
@@ -505,13 +523,15 @@ function ask10KQuestion($pdo, $ticker)
             $isCached = true;
             error_log("使用10-K快取答案: " . substr($question, 0, 50) . "...");
         } else {
-            // 2. 獲取10-K檔案內容
+            // 2. 獲取10-K摘要內容
+            global $pdo;
+            $pdo = $pdo; // 確保全域變數可用
             $tenKContent = get10KFileContent($ticker, $filename);
 
             if (!$tenKContent) {
                 echo json_encode([
                     'success' => false,
-                    'error' => "無法讀取 $ticker 的 10-K 檔案：$filename"
+                    'error' => "無法讀取 $ticker 的 10-K 摘要資料：$filename"
                 ]);
                 return;
             }
@@ -536,6 +556,9 @@ function ask10KQuestion($pdo, $ticker)
 
         // 6. 儲存問答記錄
         $questionId = saveQuestionAnswer($pdo, $conversationId, $question, $answer, $_SESSION['user_id']);
+
+        // 7. 儲存用戶問題歷史記錄
+        saveUserQuestionHistory($pdo, $_SESSION['user_id'], $questionId, $conversationId);
 
         echo json_encode([
             'success' => true,
@@ -594,44 +617,131 @@ function cache10KAnswer($pdo, $cacheKey, $answer)
 }
 
 /**
- * 獲取10-K檔案內容
+ * 獲取10-K檔案摘要內容
  */
 function get10KFileContent($ticker, $filename)
 {
     try {
-        if ($filename === 'ALL') {
-            // 獲取所有10-K檔案內容
-            $baseDir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'downloads' . DIRECTORY_SEPARATOR . $ticker . DIRECTORY_SEPARATOR . '10-K';
+        global $pdo;
+        if (!$pdo) {
+            $db = new Database();
+            $pdo = $db->getConnection();
+        }
 
-            if (!is_dir($baseDir)) {
+        if ($filename === 'ALL') {
+            // 獲取該股票所有10-K檔案的摘要內容
+            $stmt = $pdo->prepare("
+                SELECT 
+                    s.*,
+                    f.file_name as original_file_name,
+                    f.report_date
+                FROM ten_k_filings_summary s
+                INNER JOIN ten_k_filings f ON s.original_filing_id = f.id
+                WHERE f.company_name LIKE ? OR f.company_name = ?
+                ORDER BY f.report_date DESC
+            ");
+            $stmt->execute(["%$ticker%", $ticker]);
+            $summaries = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($summaries)) {
+                error_log("找不到 $ticker 的10-K摘要資料");
                 return null;
             }
 
             $allContent = "";
-            $files = glob($baseDir . DIRECTORY_SEPARATOR . '*.txt');
+            foreach ($summaries as $summary) {
+                $allContent .= "\n\n=== 檔案：{$summary['original_file_name']} (報告日期：{$summary['report_date']}) ===\n\n";
 
-            foreach ($files as $file) {
-                $content = file_get_contents($file);
-                if ($content) {
-                    $fileName = basename($file);
-                    $allContent .= "\n\n=== 檔案：$fileName ===\n\n";
-                    $allContent .= $content;
+                // 組合所有摘要內容
+                $itemSummaries = [
+                    'Item 1 - Business' => $summary['item_1_summary'],
+                    'Item 1A - Risk Factors' => $summary['item_1a_summary'],
+                    'Item 1B - Unresolved Staff Comments' => $summary['item_1b_summary'],
+                    'Item 2 - Properties' => $summary['item_2_summary'],
+                    'Item 3 - Legal Proceedings' => $summary['item_3_summary'],
+                    'Item 4 - Mine Safety' => $summary['item_4_summary'],
+                    'Item 5 - Market for Common Equity' => $summary['item_5_summary'],
+                    'Item 6 - Selected Financial Data' => $summary['item_6_summary'],
+                    'Item 7 - MD&A' => $summary['item_7_summary'],
+                    'Item 7A - Market Risk' => $summary['item_7a_summary'],
+                    'Item 8 - Financial Statements' => $summary['item_8_summary'],
+                    'Item 9 - Accountant Changes' => $summary['item_9_summary'],
+                    'Item 9A - Controls and Procedures' => $summary['item_9a_summary'],
+                    'Item 9B - Other Information' => $summary['item_9b_summary'],
+                    'Item 10 - Directors and Governance' => $summary['item_10_summary'],
+                    'Item 11 - Executive Compensation' => $summary['item_11_summary'],
+                    'Item 12 - Security Ownership' => $summary['item_12_summary'],
+                    'Item 13 - Related Transactions' => $summary['item_13_summary'],
+                    'Item 14 - Accountant Fees' => $summary['item_14_summary'],
+                    'Item 15 - Exhibits' => $summary['item_15_summary'],
+                    'Item 16 - Form 10-K Summary' => $summary['item_16_summary']
+                ];
+
+                foreach ($itemSummaries as $itemName => $itemContent) {
+                    if (!empty($itemContent)) {
+                        $allContent .= "\n## $itemName\n\n$itemContent\n\n";
+                    }
                 }
             }
 
             return $allContent ?: null;
         } else {
-            // 獲取特定檔案內容
-            $filePath = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'downloads' . DIRECTORY_SEPARATOR . $ticker . DIRECTORY_SEPARATOR . '10-K' . DIRECTORY_SEPARATOR . $filename;
+            // 獲取特定檔案的摘要內容
+            $stmt = $pdo->prepare("
+                SELECT 
+                    s.*,
+                    f.file_name as original_file_name,
+                    f.report_date
+                FROM ten_k_filings_summary s
+                INNER JOIN ten_k_filings f ON s.original_filing_id = f.id
+                WHERE f.file_name = ? AND (f.company_name LIKE ? OR f.company_name = ?)
+                LIMIT 1
+            ");
+            $stmt->execute([$filename, "%$ticker%", $ticker]);
+            $summary = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if (!file_exists($filePath)) {
+            if (!$summary) {
+                error_log("找不到檔案 $filename 的摘要資料");
                 return null;
             }
 
-            return file_get_contents($filePath);
+            $content = "=== 檔案：{$summary['original_file_name']} (報告日期：{$summary['report_date']}) ===\n\n";
+
+            // 組合所有摘要內容
+            $itemSummaries = [
+                'Item 1 - Business' => $summary['item_1_summary'],
+                'Item 1A - Risk Factors' => $summary['item_1a_summary'],
+                'Item 1B - Unresolved Staff Comments' => $summary['item_1b_summary'],
+                'Item 2 - Properties' => $summary['item_2_summary'],
+                'Item 3 - Legal Proceedings' => $summary['item_3_summary'],
+                'Item 4 - Mine Safety' => $summary['item_4_summary'],
+                'Item 5 - Market for Common Equity' => $summary['item_5_summary'],
+                'Item 6 - Selected Financial Data' => $summary['item_6_summary'],
+                'Item 7 - MD&A' => $summary['item_7_summary'],
+                'Item 7A - Market Risk' => $summary['item_7a_summary'],
+                'Item 8 - Financial Statements' => $summary['item_8_summary'],
+                'Item 9 - Accountant Changes' => $summary['item_9_summary'],
+                'Item 9A - Controls and Procedures' => $summary['item_9a_summary'],
+                'Item 9B - Other Information' => $summary['item_9b_summary'],
+                'Item 10 - Directors and Governance' => $summary['item_10_summary'],
+                'Item 11 - Executive Compensation' => $summary['item_11_summary'],
+                'Item 12 - Security Ownership' => $summary['item_12_summary'],
+                'Item 13 - Related Transactions' => $summary['item_13_summary'],
+                'Item 14 - Accountant Fees' => $summary['item_14_summary'],
+                'Item 15 - Exhibits' => $summary['item_15_summary'],
+                'Item 16 - Form 10-K Summary' => $summary['item_16_summary']
+            ];
+
+            foreach ($itemSummaries as $itemName => $itemContent) {
+                if (!empty($itemContent)) {
+                    $content .= "\n## $itemName\n\n$itemContent\n\n";
+                }
+            }
+
+            return $content ?: null;
         }
     } catch (Exception $e) {
-        error_log("讀取10-K檔案錯誤: " . $e->getMessage());
+        error_log("讀取10-K摘要資料錯誤: " . $e->getMessage());
         return null;
     }
 }
@@ -642,44 +752,97 @@ function get10KFileContent($ticker, $filename)
 function generate10KGPTAnswer($question, $tenKContent, $ticker, $filename)
 {
     try {
-        global $openaiApiKey;
+        $openaiApiKey = defined('OPENAI_API_KEY') ? OPENAI_API_KEY : null;
 
         if (empty($openaiApiKey)) {
             error_log("OpenAI API key 未設定");
             return null;
         }
 
+        // 清理和限制內容長度
+        $tenKContent = trim($tenKContent);
+        $question = trim($question);
+
+        // 移除可能導致JSON問題的特殊字符
+        $tenKContent = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $tenKContent);
+        $question = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $question);
+
         // 限制內容長度以避免超過API限制
-        $contentLimit = 15000; // 約15k字符
+        $contentLimit = 12000; // 減少到12k字符以確保安全
         if (strlen($tenKContent) > $contentLimit) {
             $tenKContent = substr($tenKContent, 0, $contentLimit) . "\n\n[內容因長度限制而截斷]";
         }
 
-        $fileInfo = $filename === 'ALL' ? "所有10-K檔案" : "10-K檔案：$filename";
+        $fileInfo = $filename === 'ALL' ? "所有10-K檔案的GPT摘要" : "10-K檔案的GPT摘要：$filename";
 
-        $prompt = "
-基於以下 $ticker 的 $fileInfo 內容，請回答用戶的問題。
+        $systemPrompt = "你是一個專業的財務分析師，專門分析SEC 10-K檔案摘要。你必須嚴格基於提供的摘要內容回答問題，並明確引用相關的Item章節。
 
-**重要回答準則：**
+重要回答規則：
+1. 當用戶明確要求「圖表」、「視覺化」、「chart」時，使用 ```chart 標記提供JSON格式的圖表數據
+2. 圖表格式：```chart + 完整的Chart.js配置JSON + ```
+3. 對於風險因素、業務描述、策略分析等一般問題，使用標準Markdown文字格式
+4. 使用清晰的段落、標題（##）、列表（-）和粗體（**）來組織內容
 
-1. **基於實際內容回答** - 只能基於提供的10-K檔案實際內容回答，不能添加檔案中沒有的資訊
-2. **明確數據來源** - 引用具體的段落、數字、比率等，並說明來自檔案的哪個部分
-3. **承認限制** - 如果檔案中沒有相關資訊，明確說明「提供的10-K檔案內容中沒有此資訊」
-4. **結構化回答** - 使用Markdown格式，包含標題、列表、粗體等
+圖表數據格式範例：
+```chart
+{
+  \"type\": \"line\",
+  \"data\": {
+    \"labels\": [\"2022\", \"2023\", \"2024\"],
+    \"datasets\": [{
+      \"label\": \"總收入 (百萬美元)\",
+      \"data\": [394328, 383285, 391035],
+      \"borderColor\": \"#2c5aa0\",
+      \"backgroundColor\": \"rgba(44, 90, 160, 0.1)\"
+    }]
+  },
+  \"options\": {
+    \"responsive\": true,
+    \"plugins\": {
+      \"title\": {
+        \"display\": true,
+        \"text\": \"Apple 財務表現\"
+      }
+    }
+  }
+}
+```";
 
-**回答格式：**
+        $userPrompt = "基於以下 $ticker 的 $fileInfo 內容，請回答用戶的問題。
+
+重要說明：
+以下內容是經過GPT處理的10-K報告摘要，包含了各個Item的詳細分析：
+- Item 1A: Risk Factors（風險因素）
+- Item 7: MD&A（管理層討論與分析）
+- Item 8: Financial Statements（財務報表）
+- 以及其他重要章節的摘要
+
+回答準則：
+1. 基於摘要內容回答 - 這些是已經經過分析的10-K報告摘要
+2. 明確引用來源 - 引用具體的Item章節，例如「根據Item 1A風險因素分析」
+3. 結構化回答 - 使用清晰的Markdown格式
+4. 專業分析 - 提供深入的財務和業務分析
+
+回答格式要求：
 - 使用繁體中文
-- 支援Markdown格式（##標題、**粗體**、列表等）
-- 對重要數據使用**粗體**標記
-- 如果適合，可以在回答末尾提供圖表數據
+- 使用標準Markdown格式：## 標題、**粗體**、- 列表項目
+- 對重要的風險因素、業務重點使用**粗體**標記
+- 按照相關的Item章節組織回答
+- 使用清晰的段落分隔
 
-10-K檔案內容：
+圖表使用指南：
+- 當用戶要求「圖表」、「視覺化」時，提供 ```chart JSON數據 ```
+- 支援的圖表類型：line（折線圖）、bar（長條圖）、pie（圓餅圖）
+- 圖表數據必須基於10-K報告中的實際數值
+- 對於一般問題，使用標準Markdown文字格式
+- 確保所有數據都有明確的來源引用
+
+10-K報告摘要內容：
 $tenKContent
 
 用戶問題：$question
 
-請提供專業、準確的回答：
-";
+請基於以上摘要內容提供專業、準確的回答。記住：只有數值數據才使用圖表，其他內容使用標準Markdown格式：";
 
         // 調用 OpenAI API
         $ch = curl_init();
@@ -696,18 +859,26 @@ $tenKContent
             'messages' => [
                 [
                     'role' => 'system',
-                    'content' => '你是一個專業的財務分析師，專門分析SEC 10-K檔案。你必須嚴格基於提供的檔案內容回答問題，不能添加檔案中沒有的資訊。對於每個回答，你必須明確引用檔案中的具體內容作為依據。'
+                    'content' => $systemPrompt
                 ],
                 [
                     'role' => 'user',
-                    'content' => $prompt
+                    'content' => $userPrompt
                 ]
             ],
             'max_tokens' => 2000,
             'temperature' => 0.1
         ];
 
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        // 確保JSON編碼正確
+        $jsonData = json_encode($data, JSON_UNESCAPED_UNICODE);
+        if ($jsonData === false) {
+            error_log("JSON編碼失敗: " . json_last_error_msg());
+            curl_close($ch);
+            return null;
+        }
+
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -761,4 +932,86 @@ function getOrCreate10KConversation($pdo, $userId, $title)
     ");
     $stmt->execute([$userId, $title]);
     return $pdo->lastInsertId();
+}
+
+/**
+ * 獲取對話歷史
+ */
+function getConversationHistory($pdo)
+{
+    try {
+        $stmt = $pdo->prepare("
+            SELECT 
+                c.id as conversation_id,
+                c.title,
+                c.created_at,
+                c.updated_at,
+                COUNT(q.id) as question_count,
+                MAX(q.created_at) as last_question_time
+            FROM conversations c 
+            LEFT JOIN questions q ON c.id = q.conversation_id
+            WHERE c.user_id = ?
+            GROUP BY c.id, c.title, c.created_at, c.updated_at
+            ORDER BY c.updated_at DESC
+            LIMIT 20
+        ");
+        $stmt->execute([$_SESSION['user_id']]);
+        $conversations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'success' => true,
+            'conversations' => $conversations
+        ]);
+    } catch (Exception $e) {
+        error_log("獲取對話歷史錯誤: " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => '獲取對話歷史失敗']);
+    }
+}
+
+/**
+ * 獲取對話訊息
+ */
+function getConversationMessages($pdo)
+{
+    $conversationId = trim($_POST['conversation_id'] ?? '');
+
+    if (empty($conversationId)) {
+        echo json_encode(['success' => false, 'error' => '對話ID不能為空']);
+        return;
+    }
+
+    try {
+        // 驗證對話是否屬於當前用戶
+        $stmt = $pdo->prepare("
+            SELECT id FROM conversations 
+            WHERE id = ? AND user_id = ?
+        ");
+        $stmt->execute([$conversationId, $_SESSION['user_id']]);
+
+        if (!$stmt->fetch()) {
+            echo json_encode(['success' => false, 'error' => '對話不存在或無權限訪問']);
+            return;
+        }
+
+        // 獲取對話中的所有問答記錄
+        $stmt = $pdo->prepare("
+            SELECT 
+                question,
+                answer,
+                created_at
+            FROM questions 
+            WHERE conversation_id = ?
+            ORDER BY created_at ASC
+        ");
+        $stmt->execute([$conversationId]);
+        $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'success' => true,
+            'messages' => $messages
+        ]);
+    } catch (Exception $e) {
+        error_log("獲取對話訊息錯誤: " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => '獲取對話訊息失敗']);
+    }
 }

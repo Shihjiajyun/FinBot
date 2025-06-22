@@ -419,7 +419,7 @@ function displayStockInfo(stockInfo, financialData, freshlyAnalyzed = false) {
     }).catch(error => {
         console.error('❌ getTenKFiles 失敗:', error);
     });
-    
+
     // 不再立即記錄到股票查詢歷史，等到用戶開始10-K對話時再記錄
     // addStockToHistory(stockInfo.symbol, stockInfo.company_name);
 }
@@ -528,13 +528,73 @@ function loadStockHistory() {
     const historyContainer = document.getElementById('chat-history');
     if (!historyContainer) return;
     
-    const stockHistory = JSON.parse(localStorage.getItem('stockQueryHistory') || '[]');
+    // 載入對話歷史而不是股票查詢歷史
+    loadConversationHistory();
+}
+
+// 載入對話歷史
+function loadConversationHistory() {
+    const historyContainer = document.getElementById('chat-history');
+    if (!historyContainer) return;
     
-    if (stockHistory.length === 0) {
+    // 顯示載入狀態
         historyContainer.innerHTML = `
             <div class="text-center" style="color: #8e8ea0; padding: 20px; font-size: 14px;">
-                暫無股票查詢記錄<br>
-                <small style="font-size: 12px;">點擊「股票查詢」開始查詢</small>
+            <div class="spinner-border spinner-border-sm" role="status"></div>
+            <div style="margin-top: 10px;">載入對話歷史...</div>
+        </div>
+    `;
+    
+    // 從後端獲取對話歷史
+    const formData = new FormData();
+    formData.append('action', 'get_conversation_history');
+    
+    console.log('🔍 正在載入對話歷史...');
+    
+    fetch('stock_qa_api.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        console.log('📥 對話歷史API響應狀態:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('📊 對話歷史API回應:', data);
+        if (data.success && data.conversations) {
+            console.log('✅ 找到', data.conversations.length, '個對話記錄');
+            displayConversationHistory(data.conversations);
+        } else {
+            console.log('❌ 沒有對話記錄或API失敗:', data);
+            historyContainer.innerHTML = `
+                <div class="text-center" style="color: #8e8ea0; padding: 20px; font-size: 14px;">
+                    暫無對話記錄<br>
+                    <small style="font-size: 12px;">選擇10-K檔案開始對話</small>
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('載入對話歷史錯誤:', error);
+        historyContainer.innerHTML = `
+            <div class="text-center" style="color: #8e8ea0; padding: 20px; font-size: 14px;">
+                載入失敗<br>
+                <small style="font-size: 12px;">請稍後再試</small>
+            </div>
+        `;
+    });
+}
+
+// 顯示對話歷史
+function displayConversationHistory(conversations) {
+    const historyContainer = document.getElementById('chat-history');
+    if (!historyContainer) return;
+    
+    if (conversations.length === 0) {
+        historyContainer.innerHTML = `
+            <div class="text-center" style="color: #8e8ea0; padding: 20px; font-size: 14px;">
+                暫無對話記錄<br>
+                <small style="font-size: 12px;">選擇10-K檔案開始對話</small>
             </div>
         `;
         return;
@@ -542,21 +602,71 @@ function loadStockHistory() {
     
     historyContainer.innerHTML = `
         <div class="mb-2" style="color: #8e8ea0; font-size: 12px; padding: 0 12px;">
-            最近查詢
+            最近對話
         </div>
-    ` + stockHistory.map(item => `
-        <div class="history-item" data-stock-symbol="${item.ticker}">
-            <div class="history-content" onclick="loadStockFromHistory('${item.ticker}')">
-                <i class="bi bi-graph-up"></i>
+    ` + conversations.map(conv => {
+        // 解析對話標題以提取股票代號和檔案資訊
+        const titleParts = conv.title.split('_');
+        const ticker = titleParts[0] || 'Unknown';
+        const fileInfo = titleParts.slice(1).join('_') || '對話';
+        
+        // 格式化時間
+        const timeAgo = formatTimeAgo(conv.updated_at);
+        
+        return `
+            <div class="history-item" data-conversation-id="${conv.conversation_id}">
+                <div class="history-content" onclick="openConversation('${conv.conversation_id}', '${conv.title}')">
+                    <i class="bi bi-chat-dots"></i>
                 <div class="question-preview">
-                    <div style="font-weight: 500;">${item.ticker}</div>
+                        <div style="font-weight: 500;">${ticker}</div>
                     <div style="font-size: 12px; color: #8e8ea0; margin-top: 2px;">
-                        ${item.companyName || '股票查詢'}
+                            ${fileInfo}
                     </div>
+                        <div style="font-size: 11px; color: #666; margin-top: 4px;">
+                            ${conv.question_count} 個問題 • ${timeAgo}
                 </div>
             </div>
         </div>
-    `).join('');
+            </div>
+        `;
+    }).join('');
+}
+
+// 格式化時間差
+function formatTimeAgo(dateString) {
+    const now = new Date();
+    // 將資料庫時間加上8小時（台灣時區）
+    const date = new Date(dateString);
+    date.setHours(date.getHours() + 8);
+    
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return '剛剛';
+    if (diffMins < 60) return `${diffMins}分鐘前`;
+    if (diffHours < 24) return `${diffHours}小時前`;
+    if (diffDays < 7) return `${diffDays}天前`;
+    return date.toLocaleDateString('zh-TW');
+}
+
+// 打開對話
+function openConversation(conversationId, title) {
+    // 解析標題以獲取股票代號和檔案名
+    const titleParts = title.split('_');
+    const ticker = titleParts[0];
+    const filename = titleParts.slice(1).join('_');
+    
+    // 跳轉到對話頁面
+    const params = new URLSearchParams({
+        ticker: ticker,
+        filename: filename,
+        conversation_id: conversationId
+    });
+    
+    const url = `tenk_chat.php?${params.toString()}`;
+    window.location.href = url;
 }
 
 // 獲取10-K檔案列表

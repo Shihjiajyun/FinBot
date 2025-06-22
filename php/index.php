@@ -190,7 +190,37 @@ $is_logged_in = check_login();
             document.addEventListener('DOMContentLoaded', function() {
                 // 直接切換到股票查詢
                 switchToStockQuery();
-                loadStockHistory();
+                // 載入對話歷史（而不是股票查詢歷史）
+                setTimeout(function() {
+                    if (typeof loadConversationHistory === 'function') {
+                        loadConversationHistory();
+                    } else {
+                        console.error('loadConversationHistory 函數未定義');
+                        // 備用方案：載入舊的股票歷史
+                        if (typeof loadStockHistory === 'function') {
+                            loadStockHistory();
+                        }
+                    }
+                }, 100);
+            });
+
+            // 監聽頁面可見性變化，當用戶從其他頁面返回時重新載入對話歷史
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden && typeof loadConversationHistory === 'function') {
+                    // 延遲一點再載入，確保頁面完全激活
+                    setTimeout(function() {
+                        loadConversationHistory();
+                    }, 500);
+                }
+            });
+
+            // 監聽窗口焦點變化
+            window.addEventListener('focus', function() {
+                if (typeof loadConversationHistory === 'function') {
+                    setTimeout(function() {
+                        loadConversationHistory();
+                    }, 300);
+                }
             });
         </script>
     <?php endif; ?>
