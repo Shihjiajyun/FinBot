@@ -28,8 +28,13 @@ if ($action === 'download_10k_filings') {
             $files = glob($downloadPath . "/*.txt");
             foreach ($files as $file) {
                 $filename = basename($file);
-                // 從檔案名提取年份
-                if (preg_match('/(\d{4})/', $filename, $matches)) {
+                // 從檔案名提取年份 (例如: 0001326801-21-000014.txt -> 2021)
+                if (preg_match('/(\d{2})-\d{6}\.txt$/', $filename, $matches)) {
+                    $shortYear = intval($matches[1]);
+                    $fullYear = $shortYear >= 90 ? 1900 + $shortYear : 2000 + $shortYear;
+                    $existingFiles[$fullYear] = $filename;
+                } else if (preg_match('/(\d{4})/', $filename, $matches)) {
+                    // 備用邏輯：尋找四位數年份
                     $year = $matches[1];
                     $existingFiles[$year] = $filename;
                 }
@@ -39,6 +44,7 @@ if ($action === 'download_10k_filings') {
         // 啟動 Python 下載腳本
         $pythonScript = __DIR__ . '/../download_single_stock.py';
         $pythonCommand = PYTHON_COMMAND;  // 使用配置的 Python 命令
+        $workingDir = dirname(__DIR__);  // 設定工作目錄為 FinBot/ 而不是 FinBot/php/
 
         // 設定環境變數避免 Unicode 錯誤
         $env_vars = '';
@@ -46,7 +52,8 @@ if ($action === 'download_10k_filings') {
             $env_vars = 'set PYTHONIOENCODING=utf-8 && ';
         }
 
-        $command = $env_vars . "\"{$pythonCommand}\" \"{$pythonScript}\" {$ticker} 2>&1";
+        // 改變到正確的工作目錄後執行Python腳本
+        $command = $env_vars . "cd \"{$workingDir}\" && \"{$pythonCommand}\" \"{$pythonScript}\" {$ticker} 2>&1";
 
         $output = [];
         $returnCode = 0;
@@ -68,7 +75,13 @@ if ($action === 'download_10k_filings') {
             $files = glob($downloadPath . "/*.txt");
             foreach ($files as $file) {
                 $filename = basename($file);
-                if (preg_match('/(\d{4})/', $filename, $matches)) {
+                // 從檔案名提取年份 (例如: 0001326801-21-000014.txt -> 2021)
+                if (preg_match('/(\d{2})-\d{6}\.txt$/', $filename, $matches)) {
+                    $shortYear = intval($matches[1]);
+                    $fullYear = $shortYear >= 90 ? 1900 + $shortYear : 2000 + $shortYear;
+                    $newFiles[$fullYear] = $filename;
+                } else if (preg_match('/(\d{4})/', $filename, $matches)) {
+                    // 備用邏輯：尋找四位數年份
                     $year = $matches[1];
                     $newFiles[$year] = $filename;
                 }
@@ -100,15 +113,41 @@ if ($action === 'download_10k_filings') {
         $downloadPath = __DIR__ . "/../downloads/{$ticker}/10-K";
         $files = [];
 
+        // 添加調試信息
+        $debugInfo = [
+            'ticker' => $ticker,
+            'current_dir' => __DIR__,
+            'downloads_path' => $downloadPath,
+            'downloads_path_exists' => is_dir($downloadPath),
+            'parent_dir' => dirname(__DIR__),
+            'downloads_base' => dirname(__DIR__) . '/downloads',
+            'downloads_base_exists' => is_dir(dirname(__DIR__) . '/downloads'),
+            'ticker_dir' => dirname(__DIR__) . '/downloads/' . $ticker,
+            'ticker_dir_exists' => is_dir(dirname(__DIR__) . '/downloads/' . $ticker)
+        ];
+
         if (is_dir($downloadPath)) {
             $fileList = glob($downloadPath . "/*.txt");
+            $debugInfo['glob_pattern'] = $downloadPath . "/*.txt";
+            $debugInfo['glob_result'] = $fileList;
+
             foreach ($fileList as $file) {
                 $filename = basename($file);
                 $size = filesize($file);
                 $modified = filemtime($file);
 
-                // 從檔案名提取年份
-                if (preg_match('/(\d{4})/', $filename, $matches)) {
+                // 從檔案名提取年份 (例如: 0001326801-21-000014.txt -> 2021)
+                if (preg_match('/(\d{2})-\d{6}\.txt$/', $filename, $matches)) {
+                    $shortYear = intval($matches[1]);
+                    $fullYear = $shortYear >= 90 ? 1900 + $shortYear : 2000 + $shortYear;
+                    $files[$fullYear] = [
+                        'filename' => $filename,
+                        'size' => $size,
+                        'modified' => date('Y-m-d H:i:s', $modified),
+                        'year' => $fullYear
+                    ];
+                } else if (preg_match('/(\d{4})/', $filename, $matches)) {
+                    // 備用邏輯：尋找四位數年份
                     $year = $matches[1];
                     $files[$year] = [
                         'filename' => $filename,
@@ -123,7 +162,8 @@ if ($action === 'download_10k_filings') {
         echo json_encode([
             'success' => true,
             'files' => $files,
-            'total_files' => count($files)
+            'total_files' => count($files),
+            'debug_info' => $debugInfo
         ]);
     } catch (Exception $e) {
         echo json_encode([

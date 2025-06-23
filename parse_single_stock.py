@@ -29,29 +29,29 @@ class SingleStockTenKParser:
         
         self.db_connection = None
         
-        # 10-K 中常見的 Item 類型
+        # 10-K 中常見的 Item 類型 - 更靈活的模式
         self.item_patterns = {
-            'item_1': r'Item\s+1\.\s+(?:Business|BUSINESS)',
-            'item_1a': r'Item\s+1A\.\s+(?:Risk Factors|RISK FACTORS)',
-            'item_1b': r'Item\s+1B\.\s+(?:Unresolved Staff Comments|UNRESOLVED STAFF COMMENTS)',
-            'item_2': r'Item\s+2\.\s+(?:Properties|PROPERTIES)',
-            'item_3': r'Item\s+3\.\s+(?:Legal Proceedings|LEGAL PROCEEDINGS)',
-            'item_4': r'Item\s+4\.\s+(?:Mine Safety|MINE SAFETY)',
-            'item_5': r'Item\s+5\.\s+(?:Market for Registrant|MARKET FOR REGISTRANT)',
-            'item_6': r'Item\s+6\.\s+(?:Selected Financial Data|SELECTED FINANCIAL DATA)',
-            'item_7': r'Item\s+7\.\s+(?:Management|MANAGEMENT)',
-            'item_7a': r'Item\s+7A\.\s+(?:Quantitative and Qualitative|QUANTITATIVE AND QUALITATIVE)',
-            'item_8': r'Item\s+8\.\s+(?:Financial Statements|FINANCIAL STATEMENTS)',
-            'item_9': r'Item\s+9\.\s+(?:Changes in and Disagreements|CHANGES IN AND DISAGREEMENTS)',
-            'item_9a': r'Item\s+9A\.\s+(?:Controls and Procedures|CONTROLS AND PROCEDURES)',
-            'item_9b': r'Item\s+9B\.\s+(?:Other Information|OTHER INFORMATION)',
-            'item_10': r'Item\s+10\.\s+(?:Directors|DIRECTORS)',
-            'item_11': r'Item\s+11\.\s+(?:Executive Compensation|EXECUTIVE COMPENSATION)',
-            'item_12': r'Item\s+12\.\s+(?:Security Ownership|SECURITY OWNERSHIP)',
-            'item_13': r'Item\s+13\.\s+(?:Certain Relationships|CERTAIN RELATIONSHIPS)',
-            'item_14': r'Item\s+14\.\s+(?:Principal Accountant|PRINCIPAL ACCOUNTANT)',
-            'item_15': r'Item\s+15\.\s+(?:Exhibits|EXHIBITS)',
-            'item_16': r'Item\s+16\.\s+(?:Form 10-K Summary|FORM 10-K SUMMARY)',
+            'item_1': r'Item\s+1\.\s*(?:Business|BUSINESS|$)',
+            'item_1a': r'Item\s+1A\.\s*(?:Risk Factors|RISK FACTORS|$)',
+            'item_1b': r'Item\s+1B\.\s*(?:Unresolved Staff Comments|UNRESOLVED STAFF COMMENTS|$)',
+            'item_2': r'Item\s+2\.\s*(?:Properties|PROPERTIES|$)',
+            'item_3': r'Item\s+3\.\s*(?:Legal Proceedings|LEGAL PROCEEDINGS|$)',
+            'item_4': r'Item\s+4\.\s*(?:Mine Safety|MINE SAFETY|$)',
+            'item_5': r'Item\s+5\.\s*(?:Market for Registrant|MARKET FOR REGISTRANT|$)',
+            'item_6': r'Item\s+6\.\s*(?:Selected Financial Data|SELECTED FINANCIAL DATA|$)',
+            'item_7': r'Item\s+7\.\s*(?:Management|MANAGEMENT|$)',
+            'item_7a': r'Item\s+7A\.\s*(?:Quantitative and Qualitative|QUANTITATIVE AND QUALITATIVE|$)',
+            'item_8': r'Item\s+8\.\s*(?:Financial Statements|FINANCIAL STATEMENTS|$)',
+            'item_9': r'Item\s+9\.\s*(?:Changes in and Disagreements|CHANGES IN AND DISAGREEMENTS|$)',
+            'item_9a': r'Item\s+9A\.\s*(?:Controls and Procedures|CONTROLS AND PROCEDURES|$)',
+            'item_9b': r'Item\s+9B\.\s*(?:Other Information|OTHER INFORMATION|$)',
+            'item_10': r'Item\s+10\.\s*(?:Directors|DIRECTORS|$)',
+            'item_11': r'Item\s+11\.\s*(?:Executive Compensation|EXECUTIVE COMPENSATION|$)',
+            'item_12': r'Item\s+12\.\s*(?:Security Ownership|SECURITY OWNERSHIP|$)',
+            'item_13': r'Item\s+13\.\s*(?:Certain Relationships|CERTAIN RELATIONSHIPS|$)',
+            'item_14': r'Item\s+14\.\s*(?:Principal Accountant|PRINCIPAL ACCOUNTANT|$)',
+            'item_15': r'Item\s+15\.\s*(?:Exhibits|EXHIBITS|$)',
+            'item_16': r'Item\s+16\.\s*(?:Form 10-K Summary|FORM 10-K SUMMARY|$)',
             'appendix': r'(?:INDEX\s+TO\s+FINANCIAL\s+STATEMENTS|APPENDIX|CONSOLIDATED\s+FINANCIAL\s+STATEMENTS)'
         }
 
@@ -119,8 +119,8 @@ class SingleStockTenKParser:
         
         for i, match in enumerate(item1_matches):
             match_pos = match.start()
-            # 檢查這個位置後面的內容
-            sample_content = content[match_pos:match_pos + 1000]
+            # 檢查這個位置後面更大範圍的內容（提高到3000字符）
+            sample_content = content[match_pos:match_pos + 3000]
             
             # 檢查是否包含真實的業務內容
             if self.looks_like_real_content(sample_content):
@@ -149,38 +149,35 @@ class SingleStockTenKParser:
         clean_text = re.sub(r'\s+', ' ', clean_text).strip()
         
         # 如果太短，可能不是真實內容
-        if len(clean_text) < 100:
+        if len(clean_text) < 50:
             return False
         
-        # 檢查是否包含明確的業務內容關鍵短語
-        business_phrases = [
-            r'Company\s+Background',
-            r'The\s+Company\s+designs',
-            r'The\s+Company\s+manufactures',
-            r'designs,\s+manufactures\s+and\s+markets',
-            r'smartphones,\s+personal\s+computers',
-            r'We\s+design\s+and\s+develop',
-            r'Our\s+business\s+segments',
-            r'fiscal\s+year.*ends',
-            r'business\s+operations',
-            r'Company.*designs.*manufactures'
+        # 檢查是否明顯是目錄（包含太多頁碼）
+        page_number_pattern = r'\b\d{1,3}\b'
+        page_numbers = re.findall(page_number_pattern, clean_text)
+        if len(page_numbers) > 10:  # 如果有太多數字，可能是目錄
+            return False
+        
+        # 檢查是否包含明顯的目錄特徵
+        toc_indicators = [
+            r'Table\s+of\s+Contents',
+            r'Part\s+I.*Part\s+II',
+            r'Item\s+\d+\..*\d+\s*$',
+            r'Page\s*\d+',
+            r'\.{3,}',  # 多個點（目錄中常見）
         ]
         
-        phrase_count = 0
-        for phrase in business_phrases:
-            if re.search(phrase, clean_text, re.IGNORECASE):
-                phrase_count += 1
-                
-        # 如果包含明確的業務短語，就認為是真實內容
-        if phrase_count >= 1:
-            return True
+        for indicator in toc_indicators:
+            if re.search(indicator, clean_text, re.IGNORECASE):
+                return False
         
-        # 檢查是否包含足夠的實質性業務關鍵字
+        # 檢查是否包含實質性的業務內容關鍵字（降低門檻）
         business_keywords = [
-            r'Company', r'designs', r'manufactures', r'markets', r'smartphones',
-            r'personal\s+computers', r'tablets', r'wearables', r'accessories',
-            r'services', r'revenue', r'fiscal\s+year', r'operations', r'products',
-            r'customers', r'development'
+            r'Company', r'business', r'operations', r'products', r'services', 
+            r'revenue', r'customers', r'markets', r'develops', r'designs', 
+            r'manufactures', r'sells', r'technology', r'solutions', r'platform',
+            r'segment', r'industry', r'competitive', r'strategy', r'fiscal',
+            r'Our Company', r'We are', r'We operate', r'We design', r'We develop'
         ]
         
         keyword_count = 0
@@ -188,8 +185,8 @@ class SingleStockTenKParser:
             if re.search(keyword, clean_text, re.IGNORECASE):
                 keyword_count += 1
         
-        # 需要至少3個相關關鍵字才認為是真實內容
-        return keyword_count >= 3
+        # 只需要至少2個相關關鍵字就認為是真實內容（降低門檻）
+        return keyword_count >= 2
 
     def clean_html_content(self, content):
         """徹底清理HTML標籤、CSS樣式和特殊字符"""
@@ -212,7 +209,7 @@ class SingleStockTenKParser:
         return content.strip()
 
     def extract_items(self, content):
-        """提取所有Item內容"""
+        """提取所有Item內容 - 改進版，處理少於5個字的目錄區塊"""
         items = {}
         
         # 第一步：徹底清理HTML標籤、CSS樣式和特殊字符
@@ -223,6 +220,7 @@ class SingleStockTenKParser:
         
         # 找到實際內容開始位置
         content_start = self.find_content_start_position(clean_content)
+        print(f"   📍 真實內容開始位置: {content_start}")
         
         # 處理一般的Items
         for item_key, pattern in self.item_patterns.items():
@@ -230,42 +228,91 @@ class SingleStockTenKParser:
                 continue
                 
             try:
-                # 從內容開始位置搜索當前Item
+                # 關鍵改進：只在真實內容區域內搜索Item
                 search_content = clean_content[content_start:]
-                start_match = re.search(pattern, search_content, re.IGNORECASE | re.MULTILINE)
+                all_matches = list(re.finditer(pattern, search_content, re.IGNORECASE | re.MULTILINE))
                 
-                if not start_match:
+                if not all_matches:
                     items[item_key] = None
+                    print(f"   ❌ {item_key}: 在真實內容區域未找到匹配")
                     continue
                 
-                # 調整位置（相對於完整清理後內容）
-                start_pos = content_start + start_match.end()
+                # 檢查每個匹配位置，找到真正包含內容的那一個
+                found_valid_content = False
                 
-                # 查找下一個Item的開始位置作為結束點
-                next_item_pos = len(clean_content)
-                for next_pattern in self.item_patterns.values():
-                    if next_pattern == pattern or next_pattern == self.item_patterns['appendix']:
+                for match_idx, start_match in enumerate(all_matches):
+                    # 調整位置（相對於完整內容）
+                    item_match_pos = content_start + start_match.start()
+                    
+                    print(f"   🔍 {item_key} 位置 {match_idx + 1}: 在位置 {item_match_pos} 找到匹配")
+                    
+                    # 對於某些Item，嘗試找到真正的內容開始位置
+                    if item_key == 'item_1':
+                        # 尋找 "Business" 標題（可能在Item 1後面一段距離）
+                        business_pattern = r'Business\s*[^\w]'
+                        business_search_range = clean_content[item_match_pos:item_match_pos + 1000]
+                        business_match = re.search(business_pattern, business_search_range, re.IGNORECASE)
+                        if business_match:
+                            # 從Business標題後開始提取內容
+                            start_pos = item_match_pos + business_match.end()
+                            print(f"   📝 {item_key}: 找到Business標題，從位置 {start_pos} 開始提取")
+                        else:
+                            # 如果沒找到Business，從Item匹配位置後開始
+                            start_pos = content_start + start_match.end()
+                    else:
+                        start_pos = content_start + start_match.end()
+                    
+                    # 查找下一個Item的開始位置作為結束點
+                    next_item_pos = len(clean_content)
+                    for next_pattern in self.item_patterns.values():
+                        if next_pattern == pattern or next_pattern == self.item_patterns['appendix']:
+                            continue
+                        # 在當前位置之後搜索下一個Item
+                        next_match = re.search(next_pattern, clean_content[start_pos:], re.IGNORECASE | re.MULTILINE)
+                        if next_match:
+                            candidate_pos = start_pos + next_match.start()
+                            if candidate_pos < next_item_pos:
+                                next_item_pos = candidate_pos
+                    
+                    # 提取Item內容
+                    item_content = clean_content[start_pos:next_item_pos].strip()
+                    
+                    # 清理內容
+                    item_content = re.sub(r'\s+', ' ', item_content)
+                    
+                    print(f"   📏 {item_key} 位置 {match_idx + 1}: 提取了 {len(item_content)} 字符")
+                    
+                    # 關鍵檢查：如果內容少於5個字符，認為還在目錄區塊，繼續嘗試下一個匹配
+                    if len(item_content.strip()) < 5:
+                        print(f"   ⏭️ {item_key} 位置 {match_idx + 1}: 內容太短 ({len(item_content)} 字符)，可能是目錄，繼續搜索...")
                         continue
-                    next_match = re.search(next_pattern, clean_content[start_pos:], re.IGNORECASE | re.MULTILINE)
-                    if next_match:
-                        candidate_pos = start_pos + next_match.start()
-                        if candidate_pos < next_item_pos:
-                            next_item_pos = candidate_pos
+                    
+                    # 額外檢查：如果內容明顯是目錄特徵（只有數字和短詞）
+                    if self.looks_like_table_of_contents(item_content):
+                        print(f"   ⏭️ {item_key} 位置 {match_idx + 1}: 看起來是目錄內容，繼續搜索...")
+                        continue
+                    
+                    # 檢查內容是否真的有意義（不只是引用或轉向）
+                    if self.is_meaningful_content(item_content):
+                        # 找到有效內容，限制長度並保存
+                        if len(item_content) > 65535:  # TEXT 欄位限制
+                            item_content = item_content[:65532] + "..."
+                        
+                        items[item_key] = item_content
+                        found_valid_content = True
+                        
+                        # 顯示找到的內容預覽
+                        preview = item_content[:100] + "..." if len(item_content) > 100 else item_content
+                        print(f"   ✅ {item_key}: {len(item_content)} 字符 (位置 {match_idx + 1}) - {preview}")
+                        break  # 找到有效內容後跳出循環
+                    else:
+                        print(f"   ⏭️ {item_key} 位置 {match_idx + 1}: 內容不夠實質，繼續搜索...")
+                        continue
                 
-                # 提取Item內容
-                item_content = clean_content[start_pos:next_item_pos].strip()
-                
-                # 清理和限制長度
-                item_content = re.sub(r'\s+', ' ', item_content)
-                if len(item_content) > 65535:  # TEXT 欄位限制
-                    item_content = item_content[:65532] + "..."
-                
-                items[item_key] = item_content if item_content else None
-                
-                # 顯示找到的內容預覽
-                if item_content:
-                    preview = item_content[:100] + "..." if len(item_content) > 100 else item_content
-                    print(f"   ✅ {item_key}: {len(item_content)} 字符 - {preview}")
+                # 如果所有匹配都無效，設為None
+                if not found_valid_content:
+                    items[item_key] = None
+                    print(f"   ❌ {item_key}: 所有位置都無有效內容")
                 
             except Exception as e:
                 print(f"⚠️ 提取 {item_key} 時發生錯誤: {e}")
@@ -275,6 +322,53 @@ class SingleStockTenKParser:
         items['appendix'] = self.extract_appendix(clean_content)
         
         return items
+
+    def looks_like_table_of_contents(self, text):
+        """檢查內容是否看起來像目錄"""
+        if len(text.strip()) < 20:  # 太短的內容可能是目錄
+            return True
+        
+        # 對於長內容（超過1000字符），更寬鬆的檢查
+        if len(text.strip()) > 1000:
+            # 檢查是否有明顯的目錄特徵（提高門檻）
+            toc_patterns = [
+                r'Table\s+of\s+Contents',
+                r'INDEX\s+TO\s+FINANCIAL\s+STATEMENTS',
+                r'^\s*Item\s+\d+[A-Z]?\s+[\.]{3,}',  # Item x ....格式
+                r'^\s*Page\s+\d+\s*$',  # 單獨的頁碼行
+            ]
+            
+            strong_toc_count = 0
+            for pattern in toc_patterns:
+                if re.search(pattern, text, re.IGNORECASE | re.MULTILINE):
+                    strong_toc_count += 1
+            
+            # 對於長內容，需要至少2個強目錄特徵才認為是目錄
+            if strong_toc_count < 2:
+                return False
+        
+        # 檢查是否有太多的頁碼數字（降低門檻）
+        numbers = re.findall(r'\b\d{1,3}\b', text)
+        words = text.split()
+        if len(words) > 0 and len(numbers) > len(words) * 0.4:  # 提高到40%門檻
+            return True
+        
+        # 檢查是否包含明顯的目錄特徵
+        toc_patterns = [
+            r'\.\.\.',  # 目錄中的點線
+            r'Page\s+\d+',  # 頁碼
+            r'^\s*\d+\s*$',  # 只有數字的行
+            r'Table\s+of\s+Contents',
+            r'^\s*Item\s+\d+[A-Z]?\s+[\.]{2,}',  # Item x ....格式
+        ]
+        
+        toc_pattern_count = 0
+        for pattern in toc_patterns:
+            if re.search(pattern, text, re.IGNORECASE | re.MULTILINE):
+                toc_pattern_count += 1
+        
+        # 需要多個目錄特徵才認為是目錄
+        return toc_pattern_count >= 2
 
     def extract_appendix(self, content):
         """特殊處理附錄內容"""
@@ -454,6 +548,66 @@ class SingleStockTenKParser:
         
         print(f"\n🎉 {self.ticker} 處理完成! 成功: {success_count}/{len(txt_files)}")
         return success_count > 0
+
+    def is_meaningful_content(self, content):
+        """檢查內容是否有意義（不只是引用或轉向）"""
+        if len(content.strip()) < 10:  # 放寬長度限制
+            return False
+        
+        # 檢查是否只是引用其他文件（更寬鬆的判斷）
+        reference_patterns = [
+            r'information.*incorporated.*by reference',
+            r'see.*proxy statement',
+            r'refer to.*form',
+            r'included.*elsewhere',
+            r'set forth.*below',
+            r'discussed.*in.*note',
+        ]
+        
+        clean_content = content.lower()
+        reference_count = 0
+        for pattern in reference_patterns:
+            if re.search(pattern, clean_content):
+                reference_count += 1
+        
+        # 只有當內容很短且主要是引用時才認為無意義
+        if reference_count > 0 and len(content.strip()) < 50:
+            return False
+        
+        # 檢查是否只包含無意義的短語
+        meaningless_patterns = [
+            r'^None\.$',
+            r'^Not applicable\.$',
+            r'^N/A$',
+            r'^\s*-\s*$',
+            r'^\s*\d+\s*$'  # 只有數字
+        ]
+        
+        for pattern in meaningless_patterns:
+            if re.match(pattern, content.strip(), re.IGNORECASE):
+                return False
+        
+        # 對於內容長度超過100字符的，基本上都認為是有意義的
+        if len(content.strip()) >= 100:
+            return True
+        
+        # 對於較短內容，檢查是否包含一些實質性關鍵字
+        substantial_keywords = [
+            r'Company', r'business', r'operations', r'revenue', r'income',
+            r'assets', r'liabilities', r'cash', r'employees', r'products',
+            r'services', r'customers', r'markets', r'competition', r'risks',
+            r'strategy', r'acquisitions', r'development', r'technology',
+            r'headquarters', r'located', r'properties', r'legal', r'proceedings',
+            r'management', r'discussion', r'analysis', r'financial', r'statements'
+        ]
+        
+        keyword_count = 0
+        for keyword in substantial_keywords:
+            if re.search(keyword, content, re.IGNORECASE):
+                keyword_count += 1
+        
+        # 降低關鍵字要求，只需要1個相關關鍵字即可
+        return keyword_count >= 1
 
 def main():
     """主函數"""

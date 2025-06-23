@@ -13,11 +13,18 @@ $action = $_POST['action'] ?? '';
 
 if ($action === 'summarize_filings') {
     $ticker = strtoupper(trim($_POST['ticker'] ?? ''));
-    $filing_ids = $_POST['filing_ids'] ?? [];
+    $filing_ids_raw = $_POST['filing_ids'] ?? '';
 
     if (empty($ticker)) {
         echo json_encode(['success' => false, 'error' => '股票代號不能為空']);
         exit;
+    }
+
+    // 處理 filing_ids - 可能是 JSON 字符串或數組
+    if (is_string($filing_ids_raw)) {
+        $filing_ids = json_decode($filing_ids_raw, true);
+    } else {
+        $filing_ids = $filing_ids_raw;
     }
 
     if (empty($filing_ids) || !is_array($filing_ids)) {
@@ -61,9 +68,19 @@ if ($action === 'summarize_filings') {
         }
 
         // 創建專用的 Python 摘要腳本
-        $summaryScript = __DIR__ . "/../summarize_single_stock.py";
+        $summaryScript = __DIR__ . "/../o3_summarizer.py";
+        $pythonCommand = PYTHON_COMMAND;  // 使用配置的 Python 命令
+        $workingDir = dirname(__DIR__);  // 設定工作目錄為 FinBot/ 而不是 FinBot/php/
         $filing_ids_str = implode(',', $filing_ids);
-        $command = "python \"{$summaryScript}\" {$ticker} {$filing_ids_str} 2>&1";
+
+        // 設定環境變數避免 Unicode 錯誤
+        $env_vars = '';
+        if (PHP_OS_FAMILY === 'Windows') {
+            $env_vars = 'set PYTHONIOENCODING=utf-8 && ';
+        }
+
+        // 改變到正確的工作目錄後執行Python腳本
+        $command = $env_vars . "cd \"{$workingDir}\" && \"{$pythonCommand}\" \"{$summaryScript}\" {$ticker} {$filing_ids_str} 2>&1";
 
         // 啟動背景進程進行摘要
         $output = [];
@@ -109,7 +126,14 @@ if ($action === 'summarize_filings') {
     }
 } else if ($action === 'check_summary_status') {
     $ticker = strtoupper(trim($_POST['ticker'] ?? ''));
-    $filing_ids = $_POST['filing_ids'] ?? [];
+    $filing_ids_raw = $_POST['filing_ids'] ?? '';
+
+    // 處理 filing_ids - 可能是 JSON 字符串或數組
+    if (is_string($filing_ids_raw)) {
+        $filing_ids = json_decode($filing_ids_raw, true);
+    } else {
+        $filing_ids = $filing_ids_raw;
+    }
 
     if (empty($ticker) || empty($filing_ids)) {
         echo json_encode(['success' => false, 'error' => '參數不完整']);

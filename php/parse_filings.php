@@ -42,7 +42,17 @@ if ($action === 'parse_10k_filings') {
 
         // 創建修改版的解析腳本
         $parseScript = __DIR__ . "/../parse_single_stock.py";
-        $command = "python \"{$parseScript}\" {$ticker} 2>&1";
+        $pythonCommand = PYTHON_COMMAND;  // 使用配置的 Python 命令
+        $workingDir = dirname(__DIR__);  // 設定工作目錄為 FinBot/ 而不是 FinBot/php/
+
+        // 設定環境變數避免 Unicode 錯誤
+        $env_vars = '';
+        if (PHP_OS_FAMILY === 'Windows') {
+            $env_vars = 'set PYTHONIOENCODING=utf-8 && ';
+        }
+
+        // 改變到正確的工作目錄後執行Python腳本
+        $command = $env_vars . "cd \"{$workingDir}\" && \"{$pythonCommand}\" \"{$parseScript}\" {$ticker} 2>&1";
 
         $output = [];
         $returnCode = 0;

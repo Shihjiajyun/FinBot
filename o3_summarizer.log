@@ -1,0 +1,199 @@
+2025-06-23 20:46:46,085 - INFO - 開始 O3 摘要批次處理: NFLX
+2025-06-23 20:46:46,087 - INFO - 待處理檔案: [62]
+2025-06-23 20:46:46,087 - INFO - 
+--- 處理進度: 1/1 ---
+2025-06-23 20:46:47,417 - ERROR - 處理檔案失敗: ID 62, 錯誤: Not all parameters were used in the SQL statement
+2025-06-23 20:46:47,418 - INFO - 
+批次處理完成!
+2025-06-23 20:46:47,418 - INFO - 成功: 0/1
+2025-06-23 20:54:36,751 - INFO - 開始 O3 摘要批次處理: NFLX
+2025-06-23 20:54:36,752 - INFO - 待處理檔案: [62]
+2025-06-23 20:54:36,753 - INFO - 
+--- 處理進度: 1/1 ---
+2025-06-23 20:54:38,006 - INFO - 開始處理: 0001065280-25-000044.txt
+2025-06-23 20:54:38,016 - INFO -    股票代號: NFLX
+2025-06-23 20:54:38,016 - INFO -    報告日期: 2024-12-31
+2025-06-23 20:54:41,759 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2025-06-23 20:54:41,765 - WARNING - O3 API 調用失敗 (嘗試 1/3): Error code: 400 - {'error': {'message': "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.", 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'unsupported_parameter'}}
+2025-06-23 20:54:43,788 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2025-06-23 20:54:43,792 - WARNING - O3 API 調用失敗 (嘗試 2/3): Error code: 400 - {'error': {'message': "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.", 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'unsupported_parameter'}}
+2025-06-23 20:54:46,060 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 400 Bad Request"
+2025-06-23 20:54:46,069 - WARNING - O3 API 調用失敗 (嘗試 3/3): Error code: 400 - {'error': {'message': "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.", 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'unsupported_parameter'}}
+2025-06-23 20:54:46,071 - ERROR - O3 API 調用最終失敗: Error code: 400 - {'error': {'message': "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.", 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'unsupported_parameter'}}
+2025-06-23 20:54:46,072 - ERROR -    摘要生成失敗
+2025-06-23 20:54:46,073 - INFO - 
+批次處理完成!
+2025-06-23 20:54:46,074 - INFO - 成功: 0/1
+2025-06-23 20:56:30,864 - INFO - 開始 O3 摘要批次處理: NFLX
+2025-06-23 20:56:30,866 - INFO - 待處理檔案: [62]
+2025-06-23 20:56:30,867 - INFO - 
+--- 處理進度: 1/1 ---
+2025-06-23 20:56:32,803 - INFO - 開始處理: 0001065280-25-000044.txt
+2025-06-23 20:56:32,804 - INFO -    股票代號: NFLX
+2025-06-23 20:56:32,805 - INFO -    報告日期: 2024-12-31
+2025-06-23 20:56:34,855 - ERROR - 處理檔案失敗: ID 62, 錯誤: 1062 (23000): Duplicate entry '62' for key 'uk_one_summary_per_filing'
+2025-06-23 20:56:34,856 - INFO - 
+批次處理完成!
+2025-06-23 20:56:34,857 - INFO - 成功: 0/1
+2025-06-23 20:57:55,019 - INFO - 開始 O3 摘要批次處理: NFLX
+2025-06-23 20:57:55,020 - INFO - 待處理檔案: [62]
+2025-06-23 20:57:55,021 - INFO - 
+--- 處理進度: 1/1 ---
+2025-06-23 20:57:56,180 - INFO - 開始處理: 0001065280-25-000044.txt
+2025-06-23 20:57:56,181 - INFO -    股票代號: NFLX
+2025-06-23 20:57:56,182 - INFO -    報告日期: 2024-12-31
+2025-06-23 20:57:57,232 - INFO -    找到未完成的摘要記錄，繼續處理 (ID: 11)
+2025-06-23 20:58:10,429 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 20:58:11,503 - INFO -    摘要完成，處理時間: 16 秒
+2025-06-23 20:58:11,504 - INFO - 
+批次處理完成!
+2025-06-23 20:58:11,505 - INFO - 成功: 1/1
+2025-06-23 21:02:38,922 - INFO - 開始 GPT-4O 摘要批次處理: NFLX
+2025-06-23 21:02:38,923 - INFO - 待處理檔案: [62]
+2025-06-23 21:02:38,923 - INFO - 
+--- 處理進度: 1/1 ---
+2025-06-23 21:02:39,455 - INFO - 開始處理: 0001065280-25-000044.txt
+2025-06-23 21:02:39,456 - INFO -    股票代號: NFLX
+2025-06-23 21:02:39,456 - INFO -    報告日期: 2024-12-31
+2025-06-23 21:02:39,800 - INFO -    檔案已有完成的摘要，跳過處理
+2025-06-23 21:02:39,801 - INFO - 
+批次處理完成!
+2025-06-23 21:02:39,801 - INFO - 成功: 1/1
+2025-06-23 21:08:38,987 - INFO - 開始 GPT-4O 摘要批次處理: NFLX
+2025-06-23 21:08:38,987 - INFO - 待處理檔案: [62]
+2025-06-23 21:08:38,987 - INFO - 
+--- 處理進度: 1/1 ---
+2025-06-23 21:08:39,479 - INFO - 開始處理: 0001065280-25-000044.txt
+2025-06-23 21:08:39,480 - INFO -    股票代號: NFLX
+2025-06-23 21:08:39,480 - INFO -    報告日期: 2024-12-31
+2025-06-23 21:08:52,148 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:08:52,943 - INFO -    摘要完成，處理時間: 13 秒
+2025-06-23 21:08:52,944 - INFO - 
+批次處理完成!
+2025-06-23 21:08:52,944 - INFO - 成功: 1/1
+2025-06-23 21:41:02,191 - INFO - 開始 GPT-4O 摘要批次處理: NFLX
+2025-06-23 21:41:02,196 - INFO - 待處理檔案: [61]
+2025-06-23 21:41:02,196 - INFO - 
+--- 處理進度: 1/1 ---
+2025-06-23 21:41:03,336 - INFO - 開始處理: 0001065280-24-000030.txt
+2025-06-23 21:41:03,336 - INFO -    股票代號: NFLX
+2025-06-23 21:41:03,338 - INFO -    報告日期: 2023-12-31
+2025-06-23 21:41:19,377 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:41:19,769 - INFO -    摘要完成，處理時間: 17 秒
+2025-06-23 21:41:19,770 - INFO - 
+批次處理完成!
+2025-06-23 21:41:19,770 - INFO - 成功: 1/1
+2025-06-23 21:49:31,792 - INFO - 開始 GPT-4O 摘要批次處理: NFLX
+2025-06-23 21:49:31,794 - INFO - 待處理檔案: [62]
+2025-06-23 21:49:31,794 - INFO - 
+--- 處理進度: 1/1 ---
+2025-06-23 21:49:33,058 - INFO - 開始處理: 0001065280-25-000044.txt
+2025-06-23 21:49:33,058 - INFO -    股票代號: NFLX
+2025-06-23 21:49:33,058 - INFO -    報告日期: 2024-12-31
+2025-06-23 21:49:33,060 - INFO -    發現 14 個有內容的項目
+2025-06-23 21:49:33,060 - INFO -      - item_1 (Business): 10650 字符
+2025-06-23 21:49:33,060 - INFO -      - item_1a (Risk Factors): 65535 字符
+2025-06-23 21:49:33,060 - INFO -      - item_1b (Unresolved Staff Comments): 4800 字符
+2025-06-23 21:49:33,060 - INFO -      - item_2 (Properties): 491 字符
+2025-06-23 21:49:33,060 - INFO -      - item_3 (Legal Proceedings): 361 字符
+2025-06-23 21:49:33,065 - INFO -      - item_5 (Market for Stock): 111 字符
+2025-06-23 21:49:33,065 - INFO -      - item_7a (Market Risk): 7753 字符
+2025-06-23 21:49:33,065 - INFO -      - item_8 (Financial Statements): 239 字符
+2025-06-23 21:49:33,065 - INFO -      - item_9a (Controls and Procedures): 7327 字符
+2025-06-23 21:49:33,067 - INFO -      - item_9b (Other Information): 5536 字符
+2025-06-23 21:49:33,068 - INFO -      - item_10 (Directors and Officers): 695 字符
+2025-06-23 21:49:33,069 - INFO -      - item_11 (Executive Compensation): 271 字符
+2025-06-23 21:49:33,069 - INFO -      - item_13 (Relationships and Transactions): 295 字符
+2025-06-23 21:49:33,070 - INFO -      - item_16 (Form 10-K Summary): 2613 字符
+2025-06-23 21:49:35,334 - INFO -    創建新的摘要記錄 (ID: 15)
+2025-06-23 21:49:35,335 - INFO -    處理項目 1/14: item_1 (Business)
+2025-06-23 21:49:46,284 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:49:47,320 - INFO -    處理項目 2/14: item_1a (Risk Factors)
+2025-06-23 21:50:00,154 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:50:01,176 - INFO -    處理項目 3/14: item_1b (Unresolved Staff Comments)
+2025-06-23 21:50:09,622 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:50:10,633 - INFO -    處理項目 4/14: item_2 (Properties)
+2025-06-23 21:50:15,377 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:50:16,389 - INFO -    處理項目 5/14: item_3 (Legal Proceedings)
+2025-06-23 21:50:20,132 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:50:21,144 - INFO -    處理項目 6/14: item_5 (Market for Stock)
+2025-06-23 21:50:27,109 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:50:28,131 - INFO -    處理項目 7/14: item_7a (Market Risk)
+2025-06-23 21:50:42,215 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:50:43,227 - INFO -    處理項目 8/14: item_8 (Financial Statements)
+2025-06-23 21:50:59,096 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:51:00,107 - INFO -    處理項目 9/14: item_9a (Controls and Procedures)
+2025-06-23 21:51:14,063 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:51:15,075 - INFO -    處理項目 10/14: item_9b (Other Information)
+2025-06-23 21:51:32,844 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:51:33,856 - INFO -    處理項目 11/14: item_10 (Directors and Officers)
+2025-06-23 21:51:36,639 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:51:37,656 - INFO -    處理項目 12/14: item_11 (Executive Compensation)
+2025-06-23 21:51:42,071 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:51:43,095 - INFO -    處理項目 13/14: item_13 (Relationships and Transactions)
+2025-06-23 21:51:47,621 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:51:48,632 - INFO -    處理項目 14/14: item_16 (Form 10-K Summary)
+2025-06-23 21:51:53,686 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:51:55,184 - INFO - 成功更新 14 個項目摘要
+2025-06-23 21:51:55,184 - INFO -    摘要完成！成功處理 14/14 個項目
+2025-06-23 21:51:55,184 - INFO -    總處理時間: 143 秒
+2025-06-23 21:51:55,184 - INFO - 
+批次處理完成!
+2025-06-23 21:51:55,184 - INFO - 成功: 1/1
+2025-06-23 21:52:57,491 - INFO - 開始 GPT-4O 摘要批次處理: NFLX
+2025-06-23 21:52:57,492 - INFO - 待處理檔案: [61]
+2025-06-23 21:52:57,492 - INFO - 
+--- 處理進度: 1/1 ---
+2025-06-23 21:52:57,989 - INFO - 開始處理: 0001065280-24-000030.txt
+2025-06-23 21:52:57,990 - INFO -    股票代號: NFLX
+2025-06-23 21:52:57,991 - INFO -    報告日期: 2023-12-31
+2025-06-23 21:52:57,991 - INFO -    發現 14 個有內容的項目
+2025-06-23 21:52:57,991 - INFO -      - item_1 (Business): 10973 字符
+2025-06-23 21:52:57,991 - INFO -      - item_1a (Risk Factors): 65535 字符
+2025-06-23 21:52:57,991 - INFO -      - item_1b (Unresolved Staff Comments): 4652 字符
+2025-06-23 21:52:57,991 - INFO -      - item_2 (Properties): 483 字符
+2025-06-23 21:52:57,992 - INFO -      - item_3 (Legal Proceedings): 361 字符
+2025-06-23 21:52:57,992 - INFO -      - item_5 (Market for Stock): 111 字符
+2025-06-23 21:52:57,992 - INFO -      - item_7a (Market Risk): 5100 字符
+2025-06-23 21:52:57,992 - INFO -      - item_8 (Financial Statements): 239 字符
+2025-06-23 21:52:57,992 - INFO -      - item_9a (Controls and Procedures): 7327 字符
+2025-06-23 21:52:57,992 - INFO -      - item_9b (Other Information): 1266 字符
+2025-06-23 21:52:57,992 - INFO -      - item_10 (Directors and Officers): 302 字符
+2025-06-23 21:52:57,992 - INFO -      - item_11 (Executive Compensation): 271 字符
+2025-06-23 21:52:57,992 - INFO -      - item_13 (Relationships and Transactions): 295 字符
+2025-06-23 21:52:57,992 - INFO -      - item_16 (Form 10-K Summary): 2544 字符
+2025-06-23 21:52:58,693 - INFO -    創建新的摘要記錄 (ID: 16)
+2025-06-23 21:52:58,695 - INFO -    處理項目 1/14: item_1 (Business)
+2025-06-23 21:53:07,889 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:53:08,907 - INFO -    處理項目 2/14: item_1a (Risk Factors)
+2025-06-23 21:53:20,493 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:53:21,506 - INFO -    處理項目 3/14: item_1b (Unresolved Staff Comments)
+2025-06-23 21:53:30,010 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:53:31,031 - INFO -    處理項目 4/14: item_2 (Properties)
+2025-06-23 21:53:34,045 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:53:35,052 - INFO -    處理項目 5/14: item_3 (Legal Proceedings)
+2025-06-23 21:53:38,034 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:53:39,041 - INFO -    處理項目 6/14: item_5 (Market for Stock)
+2025-06-23 21:53:45,716 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:53:46,727 - INFO -    處理項目 7/14: item_7a (Market Risk)
+2025-06-23 21:53:56,117 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:53:57,122 - INFO -    處理項目 8/14: item_8 (Financial Statements)
+2025-06-23 21:54:17,419 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:54:18,423 - INFO -    處理項目 9/14: item_9a (Controls and Procedures)
+2025-06-23 21:54:26,839 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:54:27,843 - INFO -    處理項目 10/14: item_9b (Other Information)
+2025-06-23 21:54:35,001 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:54:36,004 - INFO -    處理項目 11/14: item_10 (Directors and Officers)
+2025-06-23 21:54:39,403 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:54:40,407 - INFO -    處理項目 12/14: item_11 (Executive Compensation)
+2025-06-23 21:54:42,988 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:54:43,992 - INFO -    處理項目 13/14: item_13 (Relationships and Transactions)
+2025-06-23 21:54:46,744 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:54:47,762 - INFO -    處理項目 14/14: item_16 (Form 10-K Summary)
+2025-06-23 21:54:55,513 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 21:54:56,069 - INFO - 成功更新 14 個項目摘要
+2025-06-23 21:54:56,070 - INFO -    摘要完成！成功處理 14/14 個項目
+2025-06-23 21:54:56,070 - INFO -    總處理時間: 118 秒
+2025-06-23 21:54:56,070 - INFO - 
+批次處理完成!
+2025-06-23 21:54:56,070 - INFO - 成功: 1/1

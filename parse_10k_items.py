@@ -211,7 +211,7 @@ class TenKParser:
         return content.strip()
 
     def extract_items(self, content):
-        """提取所有Item內容 - 改進版，先清理HTML再跳過目錄"""
+        """提取所有Item內容 - 改進版，處理少於5個字的目錄區塊"""
         items = {}
         
         # 第一步：徹底清理HTML標籤、CSS樣式和特殊字符
@@ -230,42 +230,64 @@ class TenKParser:
                 continue
                 
             try:
-                # 從內容開始位置搜索當前Item
+                # 從內容開始位置搜索當前Item的所有匹配位置
                 search_content = clean_content[content_start:]
-                start_match = re.search(pattern, search_content, re.IGNORECASE | re.MULTILINE)
+                all_matches = list(re.finditer(pattern, search_content, re.IGNORECASE | re.MULTILINE))
                 
-                if not start_match:
+                if not all_matches:
                     items[item_key] = None
                     continue
                 
-                # 調整位置（相對於完整清理後內容）
-                start_pos = content_start + start_match.end()
+                # 檢查每個匹配位置，找到真正包含內容的那一個
+                found_valid_content = False
                 
-                # 查找下一個Item的開始位置作為結束點
-                next_item_pos = len(clean_content)
-                for next_pattern in self.item_patterns.values():
-                    if next_pattern == pattern or next_pattern == self.item_patterns['appendix']:
+                for match_idx, start_match in enumerate(all_matches):
+                    # 調整位置（相對於完整清理後內容）
+                    start_pos = content_start + start_match.end()
+                    
+                    # 查找下一個Item的開始位置作為結束點
+                    next_item_pos = len(clean_content)
+                    for next_pattern in self.item_patterns.values():
+                        if next_pattern == pattern or next_pattern == self.item_patterns['appendix']:
+                            continue
+                        next_match = re.search(next_pattern, clean_content[start_pos:], re.IGNORECASE | re.MULTILINE)
+                        if next_match:
+                            candidate_pos = start_pos + next_match.start()
+                            if candidate_pos < next_item_pos:
+                                next_item_pos = candidate_pos
+                    
+                    # 提取Item內容
+                    item_content = clean_content[start_pos:next_item_pos].strip()
+                    
+                    # 清理內容
+                    item_content = re.sub(r'\s+', ' ', item_content)
+                    
+                    # 關鍵檢查：如果內容少於5個字符，認為還在目錄區塊，繼續嘗試下一個匹配
+                    if len(item_content.strip()) < 5:
+                        print(f"   ⏭️ {item_key} 位置 {match_idx + 1}: 內容太短 ({len(item_content)} 字符)，可能是目錄，繼續搜索...")
                         continue
-                    next_match = re.search(next_pattern, clean_content[start_pos:], re.IGNORECASE | re.MULTILINE)
-                    if next_match:
-                        candidate_pos = start_pos + next_match.start()
-                        if candidate_pos < next_item_pos:
-                            next_item_pos = candidate_pos
-                
-                # 提取Item內容
-                item_content = clean_content[start_pos:next_item_pos].strip()
-                
-                # 清理和限制長度
-                item_content = re.sub(r'\s+', ' ', item_content)
-                if len(item_content) > 65535:  # TEXT 欄位限制
-                    item_content = item_content[:65532] + "..."
-                
-                items[item_key] = item_content if item_content else None
-                
-                # 顯示找到的內容預覽
-                if item_content:
+                    
+                    # 額外檢查：如果內容明顯是目錄特徵（只有數字和短詞）
+                    if self.looks_like_table_of_contents(item_content):
+                        print(f"   ⏭️ {item_key} 位置 {match_idx + 1}: 看起來是目錄內容，繼續搜索...")
+                        continue
+                    
+                    # 找到有效內容，限制長度並保存
+                    if len(item_content) > 65535:  # TEXT 欄位限制
+                        item_content = item_content[:65532] + "..."
+                    
+                    items[item_key] = item_content
+                    found_valid_content = True
+                    
+                    # 顯示找到的內容預覽
                     preview = item_content[:100] + "..." if len(item_content) > 100 else item_content
-                    print(f"   ✅ {item_key}: {len(item_content)} 字符 - {preview}")
+                    print(f"   ✅ {item_key}: {len(item_content)} 字符 (位置 {match_idx + 1}) - {preview}")
+                    break  # 找到有效內容後跳出循環
+                
+                # 如果所有匹配都無效，設為None
+                if not found_valid_content:
+                    items[item_key] = None
+                    print(f"   ❌ {item_key}: 所有位置都無有效內容")
                 
             except Exception as e:
                 print(f"⚠️ 提取 {item_key} 時發生錯誤: {e}")
@@ -275,6 +297,31 @@ class TenKParser:
         items['appendix'] = self.extract_appendix(clean_content)
         
         return items
+
+    def looks_like_table_of_contents(self, text):
+        """檢查內容是否看起來像目錄"""
+        if len(text.strip()) < 20:  # 太短的內容可能是目錄
+            return True
+        
+        # 檢查是否有太多的頁碼數字
+        numbers = re.findall(r'\b\d{1,3}\b', text)
+        if len(numbers) > len(text.split()) * 0.3:  # 如果數字占詞彙的30%以上
+            return True
+        
+        # 檢查是否包含明顯的目錄特徵
+        toc_patterns = [
+            r'\.\.\.',  # 目錄中的點線
+            r'Page\s+\d+',  # 頁碼
+            r'^\s*\d+\s*$',  # 只有數字的行
+            r'Table\s+of\s+Contents',
+            r'^\s*Item\s+\d+[A-Z]?\s+[\.]{2,}',  # Item x ....格式
+        ]
+        
+        for pattern in toc_patterns:
+            if re.search(pattern, text, re.IGNORECASE | re.MULTILINE):
+                return True
+        
+        return False
 
     def extract_appendix(self, content):
         """特殊處理附錄內容 - 基於F-頁碼和目錄結構識別（優化版）"""

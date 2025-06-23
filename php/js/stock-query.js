@@ -924,7 +924,7 @@ function generateTenKFilesHTML(ticker, parsedData, downloadData) {
             `;
         }).join('');
         
-        return `
+        const html = `
             <div class="financial-section">
                 <h5><i class="bi bi-file-earmark-text"></i> 10-K 財報檔案</h5>
                 <div class="ten-k-files-container">
@@ -937,9 +937,13 @@ function generateTenKFilesHTML(ticker, parsedData, downloadData) {
                                 <i class="bi bi-square"></i> 全不選
                             </button>
                         </div>
-                        <button class="start-chat-btn" onclick="startTenKChat('${ticker}')" disabled>
-                            <i class="bi bi-chat-dots"></i> 開始對話
-                        </button>
+                                            <button class="start-chat-btn" onclick="startTenKChat('${ticker}')" disabled>
+                        <i class="bi bi-chat-dots-fill"></i>
+                        <div class="btn-text">
+                            <span class="btn-main">開始 AI 對話</span>
+                            <span class="btn-sub">分析已選財報</span>
+                        </div>
+                    </button>
                     </div>
                     
                     <div class="filing-selection-list">
@@ -953,12 +957,34 @@ function generateTenKFilesHTML(ticker, parsedData, downloadData) {
                 </div>
             </div>
         `;
+        
+        // 延遲添加事件監聽器，確保DOM已渲染
+        setTimeout(() => addFilingCheckboxListeners(), 100);
+        
+        return html;
     }
     
     // 如果有下載的檔案但未解析，顯示解析按鈕
     if (hasDownloadedFiles) {
-        const filesList = Object.values(downloadData.files).map(file => 
-            `<li>${file.year} 年 (${file.filename})</li>`
+        // 從檔案名稱中提取年份並排序
+        const sortedFiles = Object.values(downloadData.files)
+            .map(file => {
+                // 從檔案名稱中提取年份 (例如: 0001326801-21-000014.txt -> 2021)
+                const yearMatch = file.filename.match(/(\d{2})-\d{6}\.txt$/);
+                if (yearMatch) {
+                    const shortYear = parseInt(yearMatch[1]);
+                    const fullYear = shortYear >= 90 ? 1900 + shortYear : 2000 + shortYear;
+                    return { ...file, displayYear: fullYear };
+                }
+                // 備用邏輯：嘗試從其他位置提取年份
+                const altYearMatch = file.filename.match(/(\d{4})/);
+                const displayYear = altYearMatch ? parseInt(altYearMatch[1]) : '未知';
+                return { ...file, displayYear: displayYear };
+            })
+            .sort((a, b) => b.displayYear - a.displayYear); // 按年份降序排列
+        
+        const filesList = sortedFiles.map(file => 
+            `<li>${file.displayYear} 年</li>`
         ).join('');
         
         return `
@@ -1033,40 +1059,13 @@ function startTenKChat(ticker) {
     const filingIds = Array.from(checkedBoxes).map(cb => cb.value);
     console.log('開始對話，選中的財報ID:', filingIds);
     
-    // 顯示 loading 狀態
-    showSummaryLoadingState(ticker, filingIds);
-    
-    // 發送摘要請求
-    const formData = new FormData();
-    formData.append('action', 'summarize_filings');
-    formData.append('ticker', ticker);
-    formData.append('filing_ids', JSON.stringify(filingIds));
-    
-    fetch('summarize_filings.php', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            console.log('摘要完成:', data);
-            // 跳轉到對話頁面
-            const params = new URLSearchParams({
-                ticker: ticker,
-                filing_ids: filingIds.join(','),
-                mode: 'summary'
-            });
-            window.location.href = `tenk_chat.php?${params.toString()}`;
-        } else {
-            alert('摘要過程失敗: ' + data.error);
-            hideSummaryLoadingState();
-        }
-    })
-    .catch(error => {
-        console.error('摘要請求失敗:', error);
-        alert('摘要請求失敗，請稍後再試');
-        hideSummaryLoadingState();
+    // 直接跳轉到對話頁面，讓對話頁面處理摘要邏輯
+    const params = new URLSearchParams({
+        ticker: ticker,
+        filing_ids: filingIds.join(','),
+        mode: 'summary'
     });
+    window.location.href = `tenk_chat.php?${params.toString()}`;
 }
 
 // 顯示摘要 loading 狀態
@@ -1123,6 +1122,24 @@ function downloadTenKFiles(ticker) {
         downloadBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> 下載中...';
     }
     
+    // 顯示下載進度的 SweetAlert
+    Swal.fire({
+        title: `正在下載 ${ticker} 的 10-K 財報`,
+        html: `
+            <div class="download-progress">
+                <div class="spinner-border text-primary mb-3" role="status"></div>
+                <p>正在從 SEC 資料庫下載最近 5 年的 10-K 財報...</p>
+                <small class="text-muted">這可能需要 1-2 分鐘，請耐心等候</small>
+            </div>
+        `,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
     const formData = new FormData();
     formData.append('action', 'download_10k_filings');
     formData.append('ticker', ticker);
@@ -1135,10 +1152,95 @@ function downloadTenKFiles(ticker) {
     .then(data => {
         if (data.success) {
             console.log('下載完成:', data);
+            
+            // 從檔案名稱中提取年份信息用於顯示
+            const downloadedYears = [];
+            let totalFiles = 0;
+            
+            // 計算總檔案數和提取年份
+            const filesToProcess = data.new_files || data.existing_files || {};
+            console.log('📊 下載結果數據:', data);
+            
+            // 檢查不同的數據結構
+            if (Array.isArray(filesToProcess)) {
+                // 如果是數組格式
+                totalFiles = filesToProcess.length;
+                filesToProcess.forEach(file => {
+                    const filename = typeof file === 'string' ? file : file.filename || file;
+                    const yearMatch = filename.match(/(\d{2})-\d{6}\.txt$/);
+                    if (yearMatch) {
+                        const shortYear = parseInt(yearMatch[1]);
+                        const fullYear = shortYear >= 90 ? 1900 + shortYear : 2000 + shortYear;
+                        downloadedYears.push(fullYear);
+                    }
+                });
+            } else if (typeof filesToProcess === 'object') {
+                // 如果是物件格式
+                const filesList = Object.values(filesToProcess);
+                totalFiles = filesList.length;
+                filesList.forEach(file => {
+                    const filename = typeof file === 'string' ? file : file.filename || file;
+                    const yearMatch = filename.match(/(\d{2})-\d{6}\.txt$/);
+                    if (yearMatch) {
+                        const shortYear = parseInt(yearMatch[1]);
+                        const fullYear = shortYear >= 90 ? 1900 + shortYear : 2000 + shortYear;
+                        downloadedYears.push(fullYear);
+                    }
+                });
+            }
+            
+            // 備用計算：如果還是 0，嘗試其他欄位
+            if (totalFiles === 0 && data.total_files) {
+                totalFiles = data.total_files;
+            }
+            if (totalFiles === 0 && data.message && data.message.includes('下載')) {
+                totalFiles = '多份';
+            }
+            
+            const yearsList = downloadedYears.length > 0 ? 
+                downloadedYears.sort((a, b) => b - a).join(', ') : 
+                '多個年份';
+            
+            // 直接開始自動解析，不再顯示中間對話框
+            Swal.fire({
+                title: `下載完成，開始自動解析`,
+                html: `
+                    <div class="progress-flow">
+                        <div class="step completed">
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            <span>下載 ${totalFiles} 份財報 ✓</span>
+                        </div>
+                        <div class="step active">
+                            <div class="spinner-border spinner-border-sm text-success"></div>
+                            <span>自動解析財報中...</span>
+                        </div>
+                        <div class="step">
+                            <i class="bi bi-clock"></i>
+                            <span>準備對話功能</span>
+                        </div>
+                    </div>
+                    <p><strong>${ticker}</strong> 的 ${totalFiles} 份財報已下載完成</p>
+                    <p>📅 年份：<strong>${yearsList}</strong></p>
+                    <hr>
+                    <small class="text-muted">正在自動解析這些財報以供分析...</small>
+                `,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false
+            });
+            
             // 自動開始解析
             parseDownloadedFiles(ticker);
         } else {
-            alert('下載失敗: ' + data.error);
+            Swal.fire({
+                icon: 'error',
+                title: '下載失敗',
+                text: data.error || '下載過程中發生錯誤',
+                confirmButtonText: '重試',
+                confirmButtonColor: '#dc3545'
+            });
+            
+            // 恢復按鈕狀態
             if (downloadBtn) {
                 downloadBtn.disabled = false;
                 downloadBtn.innerHTML = '<i class="bi bi-cloud-download"></i> 下載 10-K 財報';
@@ -1146,8 +1248,17 @@ function downloadTenKFiles(ticker) {
         }
     })
     .catch(error => {
-        console.error('下載失敗:', error);
-        alert('下載請求失敗，請稍後再試');
+        console.error('下載請求失敗:', error);
+        
+        Swal.fire({
+            icon: 'error',
+            title: '下載失敗',
+            text: '網路錯誤，請檢查網路連接後重試',
+            confirmButtonText: '重試',
+            confirmButtonColor: '#dc3545'
+        });
+        
+        // 恢復按鈕狀態
         if (downloadBtn) {
             downloadBtn.disabled = false;
             downloadBtn.innerHTML = '<i class="bi bi-cloud-download"></i> 下載 10-K 財報';
@@ -1163,6 +1274,49 @@ function parseDownloadedFiles(ticker) {
         parseBtn.innerHTML = '<i class="bi bi-gear"></i> 解析中...';
     }
     
+    // 如果沒有已顯示的進度對話框，才顯示新的
+    if (!Swal.isVisible()) {
+        Swal.fire({
+            title: `正在解析 ${ticker} 的財報`,
+            html: `
+                <div class="parse-progress">
+                    <div class="spinner-border text-success mb-3" role="status"></div>
+                    <p>正在提取和解析 10-K 財報內容...</p>
+                    <small class="text-muted">這個過程需要一些時間，請稍候</small>
+                </div>
+            `,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+    } else {
+        // 更新現有的進度對話框
+        Swal.update({
+            title: `正在解析 ${ticker} 的財報`,
+            html: `
+                <div class="progress-flow">
+                    <div class="step completed">
+                        <i class="bi bi-check-circle-fill text-success"></i>
+                        <span>下載財報 ✓</span>
+                    </div>
+                    <div class="step active">
+                        <div class="spinner-border spinner-border-sm text-success"></div>
+                        <span>解析財報中...</span>
+                    </div>
+                    <div class="step">
+                        <i class="bi bi-clock"></i>
+                        <span>準備對話功能</span>
+                    </div>
+                </div>
+                <p>正在提取和解析 <strong>${ticker}</strong> 的 10-K 財報內容...</p>
+                <small class="text-muted">智能解析每個Item內容，請稍候...</small>
+            `
+        });
+    }
+    
     const formData = new FormData();
     formData.append('action', 'parse_10k_filings');
     formData.append('ticker', ticker);
@@ -1175,14 +1329,96 @@ function parseDownloadedFiles(ticker) {
     .then(data => {
         if (data.success) {
             console.log('解析完成:', data);
-            // 重新載入10-K檔案區域
-            getTenKFiles(ticker).then(html => {
-                document.getElementById('ten-k-files-section').innerHTML = html;
-                // 添加checkbox監聽器
-                addFilingCheckboxListeners();
+            
+            // 顯示完成狀態並自動準備對話功能
+            Swal.fire({
+                title: `解析完成，準備對話功能`,
+                html: `
+                    <div class="progress-flow">
+                        <div class="step completed">
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            <span>下載財報 ✓</span>
+                        </div>
+                        <div class="step completed">
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            <span>解析財報 ✓</span>
+                        </div>
+                        <div class="step active">
+                            <div class="spinner-border spinner-border-sm text-primary"></div>
+                            <span>載入對話界面...</span>
+                        </div>
+                    </div>
+                    <p><strong>${ticker}</strong> 的財報已成功解析</p>
+                    <p>📄 解析了 <strong>${data.parsed_files || '多份'}</strong> 份財報</p>
+                    <p>📅 日期範圍：<strong>${data.date_range?.earliest || '未知'}</strong> 至 <strong>${data.date_range?.latest || '未知'}</strong></p>
+                    <hr>
+                    <small class="text-muted">正在載入財報列表和對話功能...</small>
+                `,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                timer: 2000,
+                timerProgressBar: true
             });
+            
+            // 延遲重新載入界面，給用戶看到完成狀態
+            setTimeout(() => {
+                // 重新載入10-K檔案區域
+                getTenKFiles(ticker).then(html => {
+                    document.getElementById('ten-k-files-section').innerHTML = html;
+                    // 添加checkbox監聽器
+                    addFilingCheckboxListeners();
+                    
+                    // 關閉進度對話框並顯示成功訊息
+                    Swal.fire({
+                        icon: 'success',
+                        title: '🎉 一切就緒！',
+                        html: `
+                            <p><strong>${ticker}</strong> 的財報分析系統已準備完成</p>
+                            <div class="ready-features">
+                                <div class="feature-item">
+                                    <i class="bi bi-check-circle text-success"></i>
+                                    <span>財報已下載並解析</span>
+                                </div>
+                                <div class="feature-item">
+                                    <i class="bi bi-check-circle text-success"></i>
+                                    <span>AI 對話功能已啟用</span>
+                                </div>
+                                <div class="feature-item">
+                                    <i class="bi bi-check-circle text-success"></i>
+                                    <span>支援多年份財報分析</span>
+                                </div>
+                            </div>
+                            <hr>
+                            <p>現在您可以：</p>
+                            <ol style="text-align: left; max-width: 300px; margin: 0 auto;">
+                                <li>選擇想要分析的財報年份</li>
+                                <li>點擊「開始 AI 對話」按鈕</li>
+                                <li>與 FinBot 討論財報內容</li>
+                            </ol>
+                        `,
+                        confirmButtonText: '開始使用',
+                        confirmButtonColor: '#28a745',
+                        width: '500px'
+                    }).then(() => {
+                        // 自動滾動到財報選擇區域
+                        document.getElementById('ten-k-files-section').scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center'
+                        });
+                    });
+                });
+            }, 2000);
         } else {
-            alert('解析失敗: ' + data.error);
+            Swal.fire({
+                icon: 'error',
+                title: '解析失敗',
+                text: data.error || '解析過程中發生錯誤',
+                confirmButtonText: '重試',
+                confirmButtonColor: '#dc3545'
+            });
+            
+            // 恢復按鈕狀態
             if (parseBtn) {
                 parseBtn.disabled = false;
                 parseBtn.innerHTML = '<i class="bi bi-gear"></i> 解析財報';
@@ -1190,8 +1426,17 @@ function parseDownloadedFiles(ticker) {
         }
     })
     .catch(error => {
-        console.error('解析失敗:', error);
-        alert('解析請求失敗，請稍後再試');
+        console.error('解析請求失敗:', error);
+        
+        Swal.fire({
+            icon: 'error',
+            title: '解析失敗',
+            text: '網路錯誤，請檢查網路連接後重試',
+            confirmButtonText: '重試',
+            confirmButtonColor: '#dc3545'
+        });
+        
+        // 恢復按鈕狀態
         if (parseBtn) {
             parseBtn.disabled = false;
             parseBtn.innerHTML = '<i class="bi bi-gear"></i> 解析財報';
