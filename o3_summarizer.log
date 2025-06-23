@@ -197,3 +197,69 @@
 2025-06-23 21:54:56,070 - INFO - 
 批次處理完成!
 2025-06-23 21:54:56,070 - INFO - 成功: 1/1
+2025-06-23 22:35:05,983 - INFO - 開始 GPT-4O 摘要批次處理: MSFT
+2025-06-23 22:35:05,984 - INFO - 待處理檔案: [67]
+2025-06-23 22:35:05,984 - INFO - 
+--- 處理進度: 1/1 ---
+2025-06-23 22:35:06,515 - INFO - 開始處理: 0001564590-22-026876.txt
+2025-06-23 22:35:06,515 - INFO -    股票代號: MSFT
+2025-06-23 22:35:06,515 - INFO -    報告日期: 2022-06-30
+2025-06-23 22:35:06,515 - INFO -    發現 17 個有內容的項目
+2025-06-23 22:35:06,515 - INFO -      - item_1 (Business): 65535 字符
+2025-06-23 22:35:06,515 - INFO -      - item_1a (Risk Factors): 65535 字符
+2025-06-23 22:35:06,515 - INFO -      - item_1b (Unresolved Staff Comments): 235 字符
+2025-06-23 22:35:06,515 - INFO -      - item_2 (Properties): 1482 字符
+2025-06-23 22:35:06,515 - INFO -      - item_3 (Legal Proceedings): 173 字符
+2025-06-23 22:35:06,515 - INFO -      - item_5 (Market for Stock): 1745 字符
+2025-06-23 22:35:06,515 - INFO -      - item_7 (Management Discussion & Analysis): 54738 字符
+2025-06-23 22:35:06,515 - INFO -      - item_7a (Market Risk): 1897 字符
+2025-06-23 22:35:06,515 - INFO -      - item_8 (Financial Statements): 65535 字符
+2025-06-23 22:35:06,516 - INFO -      - item_9a (Controls and Procedures): 6629 字符
+2025-06-23 22:35:06,516 - INFO -      - item_9b (Other Information): 117 字符
+2025-06-23 22:35:06,516 - INFO -      - item_10 (Directors and Officers): 1217 字符
+2025-06-23 22:35:06,516 - INFO -      - item_11 (Executive Compensation): 275 字符
+2025-06-23 22:35:06,516 - INFO -      - item_12 (Security Ownership): 273 字符
+2025-06-23 22:35:06,516 - INFO -      - item_13 (Relationships and Transactions): 240 字符
+2025-06-23 22:35:06,516 - INFO -      - item_14 (Principal Accountant): 11027 字符
+2025-06-23 22:35:06,516 - INFO -      - item_16 (Form 10-K Summary): 65535 字符
+2025-06-23 22:35:07,271 - INFO -    創建新的摘要記錄 (ID: 17)
+2025-06-23 22:35:07,273 - INFO -    處理項目 1/17: item_1 (Business)
+2025-06-23 22:35:19,016 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:35:20,040 - INFO -    處理項目 2/17: item_1a (Risk Factors)
+2025-06-23 22:35:34,929 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:35:35,936 - INFO -    處理項目 3/17: item_1b (Unresolved Staff Comments)
+2025-06-23 22:35:37,820 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:35:38,826 - INFO -    處理項目 4/17: item_2 (Properties)
+2025-06-23 22:35:45,511 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:35:46,519 - INFO -    處理項目 5/17: item_3 (Legal Proceedings)
+2025-06-23 22:35:51,660 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:35:52,672 - INFO -    處理項目 6/17: item_5 (Market for Stock)
+2025-06-23 22:36:00,816 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:36:01,823 - INFO -    處理項目 7/17: item_7 (Management Discussion & Analysis)
+2025-06-23 22:36:16,436 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:36:17,446 - INFO -    處理項目 8/17: item_7a (Market Risk)
+2025-06-23 22:36:24,685 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:36:25,693 - INFO -    處理項目 9/17: item_8 (Financial Statements)
+2025-06-23 22:36:38,023 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:36:39,030 - INFO -    處理項目 10/17: item_9a (Controls and Procedures)
+2025-06-23 22:36:48,122 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:36:49,132 - INFO -    處理項目 11/17: item_9b (Other Information)
+2025-06-23 22:36:51,613 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:36:52,622 - INFO -    處理項目 12/17: item_10 (Directors and Officers)
+2025-06-23 22:36:58,407 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:36:59,413 - INFO -    處理項目 13/17: item_11 (Executive Compensation)
+2025-06-23 22:37:03,284 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:37:04,296 - INFO -    處理項目 14/17: item_12 (Security Ownership)
+2025-06-23 22:37:12,312 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:37:13,324 - INFO -    處理項目 15/17: item_13 (Relationships and Transactions)
+2025-06-23 22:37:23,723 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:37:24,734 - INFO -    處理項目 16/17: item_14 (Principal Accountant)
+2025-06-23 22:37:29,847 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:37:30,883 - INFO -    處理項目 17/17: item_16 (Form 10-K Summary)
+2025-06-23 22:37:38,298 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-06-23 22:37:38,720 - INFO - 成功更新 17 個項目摘要
+2025-06-23 22:37:38,720 - INFO -    摘要完成！成功處理 17/17 個項目
+2025-06-23 22:37:38,720 - INFO -    總處理時間: 152 秒
+2025-06-23 22:37:38,720 - INFO - 
+批次處理完成!
+2025-06-23 22:37:38,721 - INFO - 成功: 1/1

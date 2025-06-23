@@ -1,4 +1,8 @@
 <?php
+// 增加執行時間限制，因為股票分析處理可能需要較長時間
+set_time_limit(600); // 10分鐘
+ini_set('max_execution_time', 600);
+
 require_once 'config.php';
 
 // 檢查登入狀態

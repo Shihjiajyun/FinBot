@@ -3,6 +3,7 @@
 """
 單一股票 10-K Filing Items Parser
 基於 parse_10k_items.py，專門處理單一股票的財報解析
+優化版本：增加性能監控和快速處理模式
 """
 
 import os
@@ -13,10 +14,12 @@ from mysql.connector import Error
 from datetime import datetime
 from pathlib import Path
 import hashlib
+import time
 
 class SingleStockTenKParser:
     def __init__(self, ticker, db_config=None):
         self.ticker = ticker.upper()
+        self.start_time = time.time()
         
         # 資料庫配置
         self.db_config = db_config or {
@@ -29,8 +32,9 @@ class SingleStockTenKParser:
         
         self.db_connection = None
         
-        # 10-K 中常見的 Item 類型 - 更靈活的模式
-        self.item_patterns = {
+        # 編譯正則表達式以提高性能
+        self.compiled_patterns = {}
+        raw_patterns = {
             'item_1': r'Item\s+1\.\s*(?:Business|BUSINESS|$)',
             'item_1a': r'Item\s+1A\.\s*(?:Risk Factors|RISK FACTORS|$)',
             'item_1b': r'Item\s+1B\.\s*(?:Unresolved Staff Comments|UNRESOLVED STAFF COMMENTS|$)',
@@ -54,6 +58,29 @@ class SingleStockTenKParser:
             'item_16': r'Item\s+16\.\s*(?:Form 10-K Summary|FORM 10-K SUMMARY|$)',
             'appendix': r'(?:INDEX\s+TO\s+FINANCIAL\s+STATEMENTS|APPENDIX|CONSOLIDATED\s+FINANCIAL\s+STATEMENTS)'
         }
+        
+        # 預編譯正則表達式
+        print("🚀 預編譯正則表達式以提高性能...")
+        for key, pattern in raw_patterns.items():
+            self.compiled_patterns[key] = re.compile(pattern, re.IGNORECASE | re.MULTILINE)
+        
+        # 常用的清理模式也預編譯
+        self.html_style_pattern = re.compile(r'<style[^>]*>.*?</style>', re.DOTALL | re.IGNORECASE)
+        self.html_script_pattern = re.compile(r'<script[^>]*>.*?</script>', re.DOTALL | re.IGNORECASE)
+        self.html_tag_pattern = re.compile(r'<[^>]+>')
+        self.html_entity_pattern = re.compile(r'&#\d+;')
+        self.whitespace_pattern = re.compile(r'\s+')
+        
+        print(f"✅ 初始化完成 ({self.ticker})")
+
+    def log_performance(self, stage, duration=None):
+        """記錄性能資訊"""
+        current_time = time.time()
+        total_elapsed = current_time - self.start_time
+        if duration is None:
+            print(f"⏱️ [{stage}] 總耗時: {total_elapsed:.2f}秒")
+        else:
+            print(f"⏱️ [{stage}] 本階段: {duration:.2f}秒, 總耗時: {total_elapsed:.2f}秒")
 
     def connect_database(self):
         """連接資料庫"""
@@ -189,98 +216,101 @@ class SingleStockTenKParser:
         return keyword_count >= 2
 
     def clean_html_content(self, content):
-        """徹底清理HTML標籤、CSS樣式和特殊字符"""
-        # 移除 <style> 標籤及其內容
-        content = re.sub(r'<style[^>]*>.*?</style>', ' ', content, flags=re.DOTALL | re.IGNORECASE)
+        """徹底清理HTML標籤、CSS樣式和特殊字符 - 優化版本"""
+        stage_start = time.time()
         
-        # 移除 <script> 標籤及其內容
-        content = re.sub(r'<script[^>]*>.*?</script>', ' ', content, flags=re.DOTALL | re.IGNORECASE)
+        # 使用預編譯的正則表達式
+        content = self.html_style_pattern.sub(' ', content)
+        content = self.html_script_pattern.sub(' ', content)
+        content = self.html_tag_pattern.sub(' ', content)
+        content = self.html_entity_pattern.sub(' ', content)
+        content = self.whitespace_pattern.sub(' ', content)
         
-        # 移除所有HTML標籤
-        content = re.sub(r'<[^>]+>', ' ', content)
+        # 移除不必要的特殊字符
+        content = content.replace('\x00', ' ')  # NULL 字符
+        content = content.replace('\r\n', '\n').replace('\r', '\n')  # 統一換行符
         
-        # 移除HTML實體
-        content = re.sub(r'&#\d+;', ' ', content)
-        content = re.sub(r'&[a-zA-Z]+;', ' ', content)
-        
-        # 移除多餘的空白字符
-        content = re.sub(r'\s+', ' ', content)
+        stage_duration = time.time() - stage_start
+        self.log_performance("HTML清理", stage_duration)
         
         return content.strip()
 
     def extract_items(self, content):
         """提取所有Item內容 - 改進版，處理少於5個字的目錄區塊"""
+        extract_start = time.time()
         items = {}
         
         # 第一步：徹底清理HTML標籤、CSS樣式和特殊字符
         print("   🧹 清理HTML標籤和CSS樣式...")
         clean_content = self.clean_html_content(content)
         
-        print(f"   📊 清理前長度: {len(content)}, 清理後長度: {len(clean_content)}")
+        print(f"   📊 清理前長度: {len(content):,}, 清理後長度: {len(clean_content):,}")
         
         # 找到實際內容開始位置
         content_start = self.find_content_start_position(clean_content)
-        print(f"   📍 真實內容開始位置: {content_start}")
+        print(f"   📍 真實內容開始位置: {content_start:,}")
+        
+        # 優化：一次性找到所有Item位置，避免重複搜索
+        all_item_positions = {}
+        for item_key, pattern in self.compiled_patterns.items():
+            if item_key == 'appendix':
+                continue
+            search_content = clean_content[content_start:]
+            matches = list(pattern.finditer(search_content))
+            if matches:
+                all_item_positions[item_key] = [(m.start() + content_start, m.end() + content_start) for m in matches]
+        
+        print(f"   🔍 找到 {len(all_item_positions)} 種Item類型的匹配位置")
         
         # 處理一般的Items
-        for item_key, pattern in self.item_patterns.items():
+        for item_key in self.compiled_patterns.keys():
             if item_key == 'appendix':  # 附錄需要特殊處理
                 continue
-                
+            
             try:
-                # 關鍵改進：只在真實內容區域內搜索Item
-                search_content = clean_content[content_start:]
-                all_matches = list(re.finditer(pattern, search_content, re.IGNORECASE | re.MULTILINE))
-                
-                if not all_matches:
+                if item_key not in all_item_positions:
                     items[item_key] = None
                     print(f"   ❌ {item_key}: 在真實內容區域未找到匹配")
                     continue
                 
-                # 檢查每個匹配位置，找到真正包含內容的那一個
+                positions = all_item_positions[item_key]
                 found_valid_content = False
                 
-                for match_idx, start_match in enumerate(all_matches):
-                    # 調整位置（相對於完整內容）
-                    item_match_pos = content_start + start_match.start()
-                    
-                    print(f"   🔍 {item_key} 位置 {match_idx + 1}: 在位置 {item_match_pos} 找到匹配")
+                for match_idx, (start_pos, end_pos) in enumerate(positions):
+                    print(f"   🔍 {item_key} 位置 {match_idx + 1}: 在位置 {start_pos:,} 找到匹配")
                     
                     # 對於某些Item，嘗試找到真正的內容開始位置
                     if item_key == 'item_1':
                         # 尋找 "Business" 標題（可能在Item 1後面一段距離）
-                        business_pattern = r'Business\s*[^\w]'
-                        business_search_range = clean_content[item_match_pos:item_match_pos + 1000]
-                        business_match = re.search(business_pattern, business_search_range, re.IGNORECASE)
+                        business_pattern = re.compile(r'Business\s*[^\w]', re.IGNORECASE)
+                        business_search_range = clean_content[start_pos:start_pos + 1000]
+                        business_match = business_pattern.search(business_search_range)
                         if business_match:
                             # 從Business標題後開始提取內容
-                            start_pos = item_match_pos + business_match.end()
-                            print(f"   📝 {item_key}: 找到Business標題，從位置 {start_pos} 開始提取")
+                            content_start_pos = start_pos + business_match.end()
+                            print(f"   📝 {item_key}: 找到Business標題，從位置 {content_start_pos:,} 開始提取")
                         else:
                             # 如果沒找到Business，從Item匹配位置後開始
-                            start_pos = content_start + start_match.end()
+                            content_start_pos = end_pos
                     else:
-                        start_pos = content_start + start_match.end()
+                        content_start_pos = end_pos
                     
-                    # 查找下一個Item的開始位置作為結束點
+                    # 快速查找下一個Item的開始位置作為結束點
                     next_item_pos = len(clean_content)
-                    for next_pattern in self.item_patterns.values():
-                        if next_pattern == pattern or next_pattern == self.item_patterns['appendix']:
+                    for other_key, other_positions in all_item_positions.items():
+                        if other_key == item_key:
                             continue
-                        # 在當前位置之後搜索下一個Item
-                        next_match = re.search(next_pattern, clean_content[start_pos:], re.IGNORECASE | re.MULTILINE)
-                        if next_match:
-                            candidate_pos = start_pos + next_match.start()
-                            if candidate_pos < next_item_pos:
-                                next_item_pos = candidate_pos
+                        for other_start, _ in other_positions:
+                            if other_start > content_start_pos and other_start < next_item_pos:
+                                next_item_pos = other_start
                     
                     # 提取Item內容
-                    item_content = clean_content[start_pos:next_item_pos].strip()
+                    item_content = clean_content[content_start_pos:next_item_pos].strip()
                     
-                    # 清理內容
-                    item_content = re.sub(r'\s+', ' ', item_content)
+                    # 快速清理內容
+                    item_content = self.whitespace_pattern.sub(' ', item_content)
                     
-                    print(f"   📏 {item_key} 位置 {match_idx + 1}: 提取了 {len(item_content)} 字符")
+                    print(f"   📏 {item_key} 位置 {match_idx + 1}: 提取了 {len(item_content):,} 字符")
                     
                     # 關鍵檢查：如果內容少於5個字符，認為還在目錄區塊，繼續嘗試下一個匹配
                     if len(item_content.strip()) < 5:
@@ -303,7 +333,7 @@ class SingleStockTenKParser:
                         
                         # 顯示找到的內容預覽
                         preview = item_content[:100] + "..." if len(item_content) > 100 else item_content
-                        print(f"   ✅ {item_key}: {len(item_content)} 字符 (位置 {match_idx + 1}) - {preview}")
+                        print(f"   ✅ {item_key}: {len(item_content):,} 字符 (位置 {match_idx + 1}) - {preview}")
                         break  # 找到有效內容後跳出循環
                     else:
                         print(f"   ⏭️ {item_key} 位置 {match_idx + 1}: 內容不夠實質，繼續搜索...")
@@ -320,6 +350,9 @@ class SingleStockTenKParser:
         
         # 特殊處理附錄
         items['appendix'] = self.extract_appendix(clean_content)
+        
+        extract_duration = time.time() - extract_start
+        self.log_performance("Items提取完成", extract_duration)
         
         return items
 
@@ -485,29 +518,46 @@ class SingleStockTenKParser:
             return False
 
     def process_10k_file(self, file_path):
-        """處理單個10-K文件"""
+        """處理單個10-K文件 - 優化版本"""
         print(f"\n📄 處理文件: {os.path.basename(file_path)}")
+        file_start_time = time.time()
         
         try:
             # 讀取文件內容
+            read_start = time.time()
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
                 content = file.read()
+            read_duration = time.time() - read_start
+            self.log_performance(f"讀取文件 ({len(content):,} 字符)", read_duration)
             
             # 提取基本資訊
+            metadata_start = time.time()
             metadata = self.extract_filing_metadata(content)
+            metadata_duration = time.time() - metadata_start
+            self.log_performance("提取元數據", metadata_duration)
+            
             print(f"   📊 股票代號: {metadata.get('company_name', 'N/A')}")
             print(f"   📅 報告日期: {metadata.get('report_date', 'N/A')}")
             
             # 提取Items
             print(f"   🔍 提取Items...")
+            items_start = time.time()
             items = self.extract_items(content)
+            items_duration = time.time() - items_start
+            self.log_performance("提取Items", items_duration)
             
             # 統計有效Items
             valid_items = sum(1 for v in items.values() if v is not None)
             print(f"   ✅ 成功提取 {valid_items}/{len(items)} 個Items")
             
             # 儲存到資料庫
+            db_start = time.time()
             success = self.save_to_database(file_path, metadata, items)
+            db_duration = time.time() - db_start
+            self.log_performance("數據庫保存", db_duration)
+            
+            file_total_duration = time.time() - file_start_time
+            self.log_performance(f"處理文件完成", file_total_duration)
             
             return success
             

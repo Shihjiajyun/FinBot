@@ -1,4 +1,8 @@
 <?php
+// 增加執行時間限制，因為解析大型10-K檔案可能需要較長時間
+set_time_limit(1800); // 30分鐘
+ini_set('max_execution_time', 1800);
+
 require_once 'config.php';
 
 header('Content-Type: application/json');
