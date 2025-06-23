@@ -235,7 +235,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         try {
-            error_log("🔍 開始分析股票 $ticker 的財務數據");
+            error_log("[START] 開始分析股票 $ticker 的財務數據");
 
             // 設置響應頭確保 JSON 輸出完整
             header('Content-Type: application/json; charset=utf-8');
@@ -272,6 +272,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Exception $e) {
             error_log("財務數據分析錯誤: " . $e->getMessage());
             echo json_encode(['success' => false, 'error' => '分析過程中發生錯誤'], JSON_UNESCAPED_UNICODE);
+        }
+
+        exit;
+    }
+
+    // 新增：獲取股價走勢數據
+    if ($action === 'get_stock_price_data') {
+        $ticker = strtoupper(trim($_POST['ticker'] ?? ''));
+        $period = $_POST['period'] ?? '6mo'; // 默認6個月
+
+        if (empty($ticker)) {
+            echo json_encode(['success' => false, 'error' => '股票代號不能為空']);
+            exit;
+        }
+
+        // 驗證股票代號格式
+        if (!preg_match('/^[A-Z0-9]{1,10}$/', $ticker)) {
+            echo json_encode(['success' => false, 'error' => '股票代號格式錯誤']);
+            exit;
+        }
+
+        try {
+            error_log("[STOCK_PRICE] 開始獲取 $ticker 的股價數據，期間: $period");
+
+            // 獲取股價數據Python腳本的路徑
+            $python_script = dirname(__DIR__) . '/get_stock_price.py';
+
+            // 檢查Python腳本是否存在
+            if (!file_exists($python_script)) {
+                echo json_encode(['success' => false, 'error' => '股價數據腳本未找到']);
+                exit;
+            }
+
+            // 執行Python腳本獲取股價數據
+            $python_cmd = PYTHON_COMMAND;
+            $command = "\"$python_cmd\" \"$python_script\" \"$ticker\" \"$period\" 2>&1";
+            $output = shell_exec($command);
+
+            if ($output === null || empty(trim($output))) {
+                error_log("[STOCK_PRICE] Python執行失敗 - 命令: $command");
+                echo json_encode([
+                    'success' => false,
+                    'error' => '無法執行股價數據腳本',
+                    'debug_info' => "使用的Python命令: $python_cmd"
+                ]);
+                exit;
+            }
+
+            // 解析Python腳本的輸出
+            $result = json_decode($output, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                error_log("[STOCK_PRICE] JSON解析失敗，Python輸出: " . $output);
+                echo json_encode(['success' => false, 'error' => '股價數據解析錯誤']);
+                exit;
+            }
+
+            if (!$result['success']) {
+                echo json_encode(['success' => false, 'error' => $result['error']]);
+                exit;
+            }
+
+            error_log("[STOCK_PRICE] 成功獲取 $ticker 股價數據：" . count($result['price_data']) . " 個數據點");
+
+            echo json_encode([
+                'success' => true,
+                'price_data' => $result['price_data'],
+                'period' => $period,
+                'ticker' => $ticker,
+                'data_points' => count($result['price_data'])
+            ]);
+        } catch (Exception $e) {
+            error_log("[STOCK_PRICE] 股價數據錯誤: " . $e->getMessage());
+            echo json_encode(['success' => false, 'error' => '獲取股價數據時發生錯誤']);
         }
 
         exit;
@@ -379,8 +453,8 @@ function executeDualSourceAnalyzer($ticker)
         $output = shell_exec($command);
         $exit_code = 0; // shell_exec不直接返回退出代碼，我們將基於輸出判斷
 
-        error_log("✅ Python 腳本執行完成");
-        error_log("📊 輸出長度: " . strlen($output) . " 字符");
+        error_log("[COMPLETE] Python 腳本執行完成");
+        error_log("[OUTPUT] 輸出長度: " . strlen($output) . " 字符");
 
         // 只記錄輸出的最後部分，避免日誌過長
         if (strlen($output) > 2000) {
@@ -390,7 +464,7 @@ function executeDualSourceAnalyzer($ticker)
         }
 
         // 檢查是否成功 - 更新成功指標
-        $success_indicators = ['🎉 股票', '財務數據分析成功完成', 'Successfully stored', 'SUCCESS'];
+        $success_indicators = ['COMPLETE', '財務數據分析成功完成', 'Successfully stored', 'SUCCESS'];
         $has_success = false;
 
         foreach ($success_indicators as $indicator) {
@@ -412,7 +486,7 @@ function executeDualSourceAnalyzer($ticker)
         }
 
         if ($has_success && !$has_error) {
-            error_log("🎉 股票 $ticker 財務數據分析成功完成");
+            error_log("[SUCCESS] 股票 $ticker 財務數據分析成功完成");
             return [
                 'success' => true,
                 'message' => '財務數據分析並存入資料庫成功',

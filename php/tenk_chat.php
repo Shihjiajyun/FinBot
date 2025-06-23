@@ -21,10 +21,28 @@ if ($filename !== 'ALL' && (strpos($filename, '..') !== false || strpos($filenam
     exit;
 }
 
+// 從檔案名稱中提取年份的函數
+function extractYearFromFilename($filename)
+{
+    // 支持多種檔案名稱格式
+    // 例如: AAPL_10-K_2023.txt, MSFT-10K-2022.pdf, TSLA_2021_10-K.txt 等
+    if (preg_match('/20\d{2}/', $filename, $matches)) {
+        return $matches[0];
+    }
+    return $filename;
+}
+
 $isAllFiles = $filename === 'ALL';
-$pageTitle = $isAllFiles ?
-    "$ticker - 所有 10-K 檔案對話" :
-    "$ticker - $filename 對話";
+
+// 生成頁面標題
+if ($isAllFiles) {
+    $pageTitle = "$ticker - 所有 10-K 檔案對話";
+    $displayText = "所有年份";
+} else {
+    $year = extractYearFromFilename($filename);
+    $pageTitle = "$ticker - $year 年 10-K 對話";
+    $displayText = $year . " 年";
+}
 
 // 處理對話記錄
 $db = new Database();
@@ -259,7 +277,7 @@ if ($conversationId) {
         <div class="tenk-page-header">
             <div class="d-flex justify-content-between align-items-center">
                 <h1>
-                    <i class="bi bi-<?= $isAllFiles ? 'collection' : 'file-earmark-text' ?>"></i>
+                    <i class="bi bi-<?= $isAllFiles ? 'collection' : 'calendar3' ?>"></i>
                     <?= htmlspecialchars($pageTitle) ?>
                 </h1>
                 <a href="index.php" class="back-btn">
@@ -277,7 +295,7 @@ if ($conversationId) {
                     </div>
                     <div class="message-content">
                         <h5>歡迎使用 FinBot 10-K 分析</h5>
-                        <p>我可以幫您分析 <?= htmlspecialchars($ticker) ?> 的<?= $isAllFiles ? '所有' : '指定' ?> 10-K 財報檔案。請提出您的問題：
+                        <p>我可以幫您分析 <?= htmlspecialchars($ticker) ?> 的<?= $isAllFiles ? '所有年份' : htmlspecialchars($displayText) ?> 10-K 財報檔案。請提出您的問題：
                         </p>
                         <div class="suggested-questions">
                             <button class="suggested-btn" onclick="askSuggestedQuestion('公司的主要業務和產品線有哪些？')">
@@ -299,7 +317,7 @@ if ($conversationId) {
 
             <div class="tenk-page-input">
                 <div class="input-container">
-                    <textarea id="question-input" placeholder="請針對<?= $isAllFiles ? '所有' : '此份' ?> 10-K 檔案提出您的問題..."
+                    <textarea id="question-input" placeholder="請針對<?= $isAllFiles ? '所有年份' : htmlspecialchars($displayText) ?> 10-K 檔案提出您的問題..."
                         rows="2"></textarea>
                     <button id="send-button" onclick="sendQuestion()">
                         <i class="bi bi-send"></i>
@@ -315,6 +333,8 @@ if ($conversationId) {
     <script>
         const ticker = <?= json_encode($ticker) ?>;
         const filename = <?= json_encode($filename) ?>;
+        const displayText = <?= json_encode($displayText) ?>;
+        const isAllFiles = <?= json_encode($isAllFiles) ?>;
         const conversationId = <?= $conversationId ? $conversationId : 'null' ?>;
         const existingConversation = <?= $existingConversation ? json_encode($existingConversation) : 'null' ?>;
 
@@ -462,7 +482,7 @@ if ($conversationId) {
                         <div class="thinking-animation">
                             <span></span><span></span><span></span>
                         </div>
-                        <small>FinBot 正在分析 10-K 檔案...</small>
+                        <small>FinBot 正在分析 ${isAllFiles ? '所有年份' : displayText} 10-K 檔案...</small>
                     </div>
                 `;
             } else {

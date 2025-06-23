@@ -5,6 +5,15 @@ Dual source stock financial analysis tool
 Extract data from macrotrends.net and Yahoo Finance and compare them
 """
 
+import sys
+import os
+
+# 設置標準輸出編碼為UTF-8，避免Windows下的編碼問題
+if sys.platform.startswith('win'):
+    import codecs
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
+
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -208,11 +217,14 @@ class DualSourceAnalyzer:
                 final_cash_flow = macro_cash_flow if macro_cash_flow is not None else yahoo_cash_flow
                 final_equity = macro_equity if macro_equity is not None else yahoo_equity
                 
-                # =============== 新增：选择最佳数据（资产负债表指标优先Macrotrends，Yahoo作为补充）===============
+                # =============== 新增：选择最佳数据（优先使用可用的数据源）===============
                 final_total_assets = macro_total_assets if macro_total_assets is not None else yahoo_total_assets
                 final_total_liabilities = macro_total_liabilities if macro_total_liabilities is not None else yahoo_total_liabilities
                 final_long_term_debt = macro_long_term_debt if macro_long_term_debt is not None else yahoo_long_term_debt
-                final_retained_earnings_balance = macro_retained_earnings_balance  # 只有Macrotrends有
+                
+                # 保留盈餘：優先使用 Yahoo Finance，Macrotrends 作為備用
+                final_retained_earnings_balance = yahoo_data.get('retained_earnings_balance') if yahoo_data.get('retained_earnings_balance') is not None else macro_retained_earnings_balance
+                
                 # 流動資產和流動負債：使用 Yahoo Finance 數據（Macrotrends 沒有這些獨立頁面）
                 final_current_assets = yahoo_current_assets
                 final_current_liabilities = yahoo_current_liabilities
@@ -224,11 +236,11 @@ class DualSourceAnalyzer:
                 elif yahoo_current_ratio is not None:
                     final_current_ratio = yahoo_current_ratio  # 备用：使用Yahoo计算的比率
                 
-                # =============== 选择最佳现金流数据 ===============
-                final_free_cash_flow = macro_free_cash_flow if macro_free_cash_flow is not None else None
-                final_cash_flow_investing = macro_cash_flow_investing if macro_cash_flow_investing is not None else None
-                final_cash_flow_financing = macro_cash_flow_financing if macro_cash_flow_financing is not None else None
-                final_cash_and_cash_equivalents = macro_cash_and_cash_equivalents if macro_cash_and_cash_equivalents is not None else None
+                # =============== 选择最佳现金流数据（優先使用可用的數據源）===============
+                final_free_cash_flow = macro_free_cash_flow if macro_free_cash_flow is not None else yahoo_data.get('free_cash_flow')
+                final_cash_flow_investing = macro_cash_flow_investing if macro_cash_flow_investing is not None else yahoo_data.get('cash_flow_investing')
+                final_cash_flow_financing = macro_cash_flow_financing if macro_cash_flow_financing is not None else yahoo_data.get('cash_flow_financing')
+                final_cash_and_cash_equivalents = macro_cash_and_cash_equivalents if macro_cash_and_cash_equivalents is not None else yahoo_data.get('cash_and_cash_equivalents')
                 
                 # 檢查是否有足夠的基礎數據才存入資料庫
                 if final_revenue is None and final_income is None:
@@ -339,71 +351,96 @@ class DualSourceAnalyzer:
     # ============= MACROTRENDS 數據抓取 =============
     
     def get_macrotrends_table(self, url, title_keyword):
-        """fetch specified table data from macrotrends.net (improved version, based on the success logic of test.py)"""
-        try:
-            print(f"    Macrotrends: {url}")
-            res = requests.get(url, headers=self.headers, timeout=10)
-            res.raise_for_status()
-            soup = BeautifulSoup(res.text, 'html.parser')
-
-            # 使用與 test.py 相同的表格查找邏輯
-            tables = soup.find_all("table", class_="historical_data_table")
-            
-            if not tables:
-                print(f"     historical_data_table not found")
-                return None
+        """fetch specified table data from macrotrends.net (improved version with retry mechanism)"""
+        max_retries = 3
+        base_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                print(f"    Macrotrends: {url} (attempt {attempt + 1})")
                 
-            # 通常第一個表格就是我們要的主數據表
-            table = tables[0]
-            rows = table.find_all("tr")
-            
-            if len(rows) < 2:  # 至少要有標題行和一行數據
-                print(f"     table row is not enough")
-                return None
-            
-            # 手動解析表格數據（更可靠）
-            data = []
-            for row in rows[1:]:  # 跳過標題行
-                cols = row.find_all("td")
-                if len(cols) >= 2:
-                    year_text = cols[0].text.strip()
-                    value_text = cols[1].text.strip().replace("$", "").replace(",", "").replace("B", "")
+                # 增加延遲以避免429錯誤
+                if attempt > 0:
+                    delay = base_delay * (2 ** attempt)  # 指數退避
+                    print(f"    Waiting {delay} seconds before retry...")
+                    time.sleep(delay)
+                
+                res = requests.get(url, headers=self.headers, timeout=15)
+                res.raise_for_status()
+                soup = BeautifulSoup(res.text, 'html.parser')
+
+                # 使用與 test.py 相同的表格查找邏輯
+                tables = soup.find_all("table", class_="historical_data_table")
+                
+                if not tables:
+                    print(f"     historical_data_table not found")
+                    continue
                     
-                    try:
-                        # 提取年份
-                        year_match = re.search(r'(\d{4})', year_text)
-                        if year_match:
-                            year = int(year_match.group(1))
-                            value = float(value_text)
-                            
-                            # 只保留近15年的數據
-                            if 2010 <= year <= 2024:
-                                data.append((year, value))
-                    except (ValueError, TypeError):
+                # 通常第一個表格就是我們要的主數據表
+                table = tables[0]
+                rows = table.find_all("tr")
+                
+                if len(rows) < 2:  # 至少要有標題行和一行數據
+                    print(f"     table row is not enough")
+                    continue
+                
+                # 手動解析表格數據（更可靠）
+                data = []
+                for row in rows[1:]:  # 跳過標題行
+                    cols = row.find_all("td")
+                    if len(cols) >= 2:
+                        year_text = cols[0].text.strip()
+                        value_text = cols[1].text.strip().replace("$", "").replace(",", "").replace("B", "")
+                        
+                        try:
+                            # 提取年份
+                            year_match = re.search(r'(\d{4})', year_text)
+                            if year_match:
+                                year = int(year_match.group(1))
+                                value = float(value_text)
+                                
+                                # 只保留近15年的數據
+                                if 2010 <= year <= 2024:
+                                    data.append((year, value))
+                        except (ValueError, TypeError):
+                            continue
+                
+                if not data:
+                    print(f"no valid data parsed")
+                    continue
+                
+                # 轉換為 DataFrame
+                df = pd.DataFrame(data, columns=["Year", title_keyword])
+                df = df.sort_values('Year', ascending=False)  # 按年份降序排列
+                
+                print(f" Successfully parsed {len(df)} years of {title_keyword} data")
+                return df
+                
+            except requests.exceptions.RequestException as e:
+                if "429" in str(e):
+                    print(f"     Rate limited (429), attempt {attempt + 1}/{max_retries}")
+                    if attempt < max_retries - 1:
                         continue
-            
-            if not data:
-                print(f"no valid data parsed")
-                return None
-            
-            # 轉換為 DataFrame
-            df = pd.DataFrame(data, columns=["Year", title_keyword])
-            df = df.sort_values('Year', ascending=False)  # 按年份降序排列
-            
-            print(f" Successfully parsed {len(df)} years of {title_keyword} data")
-            return df
-            
-        except Exception as e:
-            print(f"     Macrotrends error: {e}")
-            return None
+                    else:
+                        print(f"     Max retries reached, skipping {title_keyword}")
+                        return None
+                else:
+                    print(f"     Macrotrends error: {e}")
+                    if attempt < max_retries - 1:
+                        continue
+                    else:
+                        return None
+                        
+        return None
     
     def get_macrotrends_data(self, ticker, company_name):
         """get financial data from macrotrends"""
         print("fetching data from Macrotrends...")
         
-        # 使用通用的公司名稱 slug，基於 test.py 的成功經驗
-        # 對於大多數股票，使用 "alphabet" 作為通用 slug 更穩定
-        company_name_slug = "alphabet"  # 使用通用 slug，避免公司名稱不匹配問題
+        # 為不同股票使用正確的公司名稱 slug
+        company_name_slug = self.get_company_slug_for_macrotrends(ticker, company_name)
+        print(f"Using company slug: {company_name_slug} for {ticker}")
+        
         macrotrends_data = {}
 
         # 核心財務指標（修正版 - 基於 test.py 的成功經驗）
@@ -547,7 +584,7 @@ class DualSourceAnalyzer:
         for metric_name, metric_url in cash_flow_metrics.items():
             print(f"     fetching {metric_name}...")
             # 使用 test.py 中成功的 URL 格式：使用統一的 company_name_slug
-            df = self.fetch_macrotrends_table_simple(ticker, metric_url, metric_name)
+            df = self.fetch_macrotrends_table_simple(ticker, company_name_slug, metric_url, metric_name)
             if df is not None:
                 # 根據指標類型存儲到對應的鍵中
                 if metric_name == "Free Cash Flow":
@@ -575,83 +612,217 @@ class DualSourceAnalyzer:
         
         return macrotrends_data
     
-    def fetch_macrotrends_table_simple(self, ticker, page_slug, metric_name, max_years=10):
-        """simplified data fetching method based on the success logic of test.py"""
-        # 使用通用的 "alphabet" slug，這是 test.py 中成功的關鍵
-        url = f"https://www.macrotrends.net/stocks/charts/{ticker}/alphabet/{page_slug}"
-        headers = {
-            "User-Agent": "Mozilla/5.0"
+    def get_company_slug_for_macrotrends(self, ticker, company_name):
+        """為不同股票獲取正確的 Macrotrends company slug"""
+        # 已知的常見股票 slug 對應表
+        slug_mapping = {
+            'AAPL': 'apple',
+            'GOOGL': 'alphabet', 
+            'GOOG': 'alphabet',
+            'TSLA': 'tesla',
+            'MSFT': 'microsoft',
+            'AMZN': 'amazon',
+            'META': 'meta-platforms',
+            'NVDA': 'nvidia',
+            'NFLX': 'netflix',
+            'CRM': 'salesforce',
+            'ORCL': 'oracle',
+            'IBM': 'ibm',
+            'AMD': 'amd',
+            'INTC': 'intel',
+            'PYPL': 'paypal',
+            'DIS': 'disney',
+            'BA': 'boeing',
+            'JPM': 'jpmorgan-chase',
+            'V': 'visa',
+            'WMT': 'walmart',
+            'JNJ': 'johnson-johnson',
+            'PG': 'procter-gamble',
+            'KO': 'coca-cola',
+            'PFE': 'pfizer',
+            'XOM': 'exxon-mobil',
+            'CVX': 'chevron',
+            'HD': 'home-depot',
+            'VZ': 'verizon',
+            'T': 'at-t',
+            'CSCO': 'cisco',
+            'ADBE': 'adobe',
+            'CRM': 'salesforce',
+            'NKE': 'nike',
+            'MRK': 'merck',
+            'UNH': 'unitedhealth-group',
+            'LLY': 'eli-lilly',
+            'ABBV': 'abbvie',
+            'TMO': 'thermo-fisher-scientific',
+            'DHR': 'danaher',
+            'PEP': 'pepsico',
+            'COST': 'costco',
+            'AVGO': 'broadcom',
+            'ACN': 'accenture',
+            'TXN': 'texas-instruments',
+            'LIN': 'linde',
+            'MDT': 'medtronic',
+            'PM': 'philip-morris',
+            'QCOM': 'qualcomm',
+            'HON': 'honeywell',
+            'UPS': 'ups',
+            'LOW': 'lowes',
+            'SPGI': 's-p-global',
+            'GS': 'goldman-sachs',
+            'BLK': 'blackrock',
+            'C': 'citigroup',
+            'MS': 'morgan-stanley',
+            'AXP': 'american-express',
+            'CAT': 'caterpillar',
+            'DE': 'deere',
+            'MMM': '3m',
+            'GE': 'general-electric',
+            'F': 'ford-motor',
+            'GM': 'general-motors'
         }
         
-        try:
-            print(f"        fetching from: {url}")
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()  # 檢查 HTTP 錯誤
-            soup = BeautifulSoup(response.text, "html.parser")
+        # 先檢查已知的對應表
+        if ticker.upper() in slug_mapping:
+            return slug_mapping[ticker.upper()]
+        
+        # 如果沒有已知的對應，嘗試根據公司名稱生成 slug
+        if company_name:
+            # 將公司名稱轉換為 slug 格式
+            import re
+            slug = company_name.lower()
+            slug = re.sub(r'[^a-z0-9\s-]', '', slug)  # 移除特殊字符
+            slug = re.sub(r'\s+', '-', slug)  # 將空格轉換為連字符
+            slug = re.sub(r'-+', '-', slug)  # 合併多個連字符
+            slug = slug.strip('-')  # 移除首尾的連字符
             
-            table = soup.find("table", class_="historical_data_table")
-            if not table:
-                print(f"        historical_data_table not found: {url}")
-                return None
+            # 移除常見的公司後綴
+            suffixes_to_remove = [
+                'inc', 'corp', 'corporation', 'company', 'co', 'ltd', 'limited',
+                'llc', 'plc', 'technologies', 'technology', 'systems', 'group'
+            ]
+            for suffix in suffixes_to_remove:
+                if slug.endswith('-' + suffix):
+                    slug = slug[:-len('-' + suffix)]
+            
+            return slug
+        
+        # 最後的備用方案：使用小寫的股票代號
+        return ticker.lower()
+    
+    def fetch_macrotrends_table_simple(self, ticker, company_slug, page_slug, metric_name, max_years=10):
+        """simplified data fetching method using the correct company slug (enhanced retry for cash flow metrics)"""
+        url = f"https://www.macrotrends.net/stocks/charts/{ticker}/{company_slug}/{page_slug}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        
+        # 對現金流指標使用更強的重試機制
+        cash_flow_metrics = ['free-cash-flow', 'cash-flow-from-investing-activities', 
+                           'cash-flow-from-financial-activities', 'cash-on-hand']
+        is_cash_flow_metric = page_slug in cash_flow_metrics
+        
+        max_retries = 5 if is_cash_flow_metric else 3  # 現金流指標用更多重試
+        base_delay = 3 if is_cash_flow_metric else 2   # 現金流指標用更長延遲
+        
+        for attempt in range(max_retries):
+            try:
+                print(f"        fetching from: {url} (attempt {attempt + 1}/{max_retries})")
                 
-            rows = table.find_all("tr")
-            if len(rows) < 2:
-                print(f"        insufficient data rows: {url}")
-                return None
-            
-            data = {}
-            for row in rows[1:]:  # 跳過標題行
-                cols = row.find_all("td")
-                if len(cols) >= 2:
-                    year_text = cols[0].text.strip()
-                    value_text = cols[1].text.strip().replace("$", "").replace(",", "").replace("B", "")
-                    try:
-                        # 提取年份（處理可能的日期格式）
-                        if year_text.isdigit():
-                            year = int(year_text)
-                        else:
-                            # 嘗試從日期中提取年份
-                            import re
-                            year_match = re.search(r'(\d{4})', year_text)
-                            if year_match:
-                                year = int(year_match.group(1))
-                            else:
-                                continue
-                        
-                        value = float(value_text)
-                        
-                        # 轉換單位：十億 → 百萬
-                        if 'B' in cols[1].text or value < 1000:  # 如果是十億單位或數值較小
-                            value = value * 1000  # 十億 → 百萬
-                        
-                        # 只保留合理年份範圍的數據
-                        if 2005 <= year <= 2025:
-                            data[year] = value
-                            print(f"        parsed: {year} = ${value:,.0f}M")
-                    except (ValueError, TypeError) as e:
-                        print(f"        skipping invalid data: {year_text} = {value_text} ({e})")
+                # 增加延遲以避免429錯誤
+                if attempt > 0:
+                    delay = base_delay * (2 ** attempt)  # 指數退避
+                    print(f"        waiting {delay} seconds before retry...")
+                    time.sleep(delay)
+                
+                response = requests.get(url, headers=headers, timeout=15)
+                response.raise_for_status()  # 檢查 HTTP 錯誤
+                soup = BeautifulSoup(response.text, "html.parser")
+                
+                table = soup.find("table", class_="historical_data_table")
+                if not table:
+                    print(f"        historical_data_table not found: {url}")
+                    if attempt < max_retries - 1:
                         continue
-            
-            if not data:
-                print(f"        no valid data parsed: {url}")
-                return None
+                    else:
+                        return None
+                        
+                rows = table.find_all("tr")
+                if len(rows) < 2:
+                    print(f"        insufficient data rows: {url}")
+                    if attempt < max_retries - 1:
+                        continue
+                    else:
+                        return None
                 
-            # 僅保留最近 N 年資料，轉換為 DataFrame 格式
-            recent_data = {year: data[year] for year in sorted(data.keys(), reverse=True)[:max_years]}
-            
-            # 轉換為 DataFrame 格式（與其他方法保持一致）
-            df_data = []
-            for year, value in recent_data.items():
-                df_data.append([year, value])
-            
-            df = pd.DataFrame(df_data, columns=["Year", f"{metric_name} (M USD)"])
-            print(f"        successfully parsed {len(df)} years of {metric_name} data")
-            return df
-            
-        except Exception as e:
-            print(f"        error fetching {metric_name}: {e}")
-            return None
-
+                data = {}
+                for row in rows[1:]:  # 跳過標題行
+                    cols = row.find_all("td")
+                    if len(cols) >= 2:
+                        year_text = cols[0].text.strip()
+                        value_text = cols[1].text.strip().replace("$", "").replace(",", "").replace("B", "")
+                        try:
+                            # 提取年份（處理可能的日期格式）
+                            if year_text.isdigit():
+                                year = int(year_text)
+                            else:
+                                # 嘗試從日期中提取年份
+                                import re
+                                year_match = re.search(r'(\d{4})', year_text)
+                                if year_match:
+                                    year = int(year_match.group(1))
+                                else:
+                                    continue
+                            
+                            value = float(value_text)
+                            
+                            # 轉換單位：十億 → 百萬
+                            if 'B' in cols[1].text or value < 1000:  # 如果是十億單位或數值較小
+                                value = value * 1000  # 十億 → 百萬
+                            
+                            # 只保留合理年份範圍的數據
+                            if 2005 <= year <= 2025:
+                                data[year] = value
+                                print(f"        parsed: {year} = ${value:,.0f}M")
+                        except (ValueError, TypeError) as e:
+                            print(f"        skipping invalid data: {year_text} = {value_text} ({e})")
+                            continue
+                
+                if not data:
+                    print(f"        no valid data parsed: {url}")
+                    if attempt < max_retries - 1:
+                        continue
+                    else:
+                        return None
+                        
+                # 僅保留最近 N 年資料，轉換為 DataFrame 格式
+                recent_data = {year: data[year] for year in sorted(data.keys(), reverse=True)[:max_years]}
+                
+                # 轉換為 DataFrame 格式（與其他方法保持一致）
+                df_data = []
+                for year, value in recent_data.items():
+                    df_data.append([year, value])
+                
+                df = pd.DataFrame(df_data, columns=["Year", f"{metric_name} (M USD)"])
+                print(f"        [SUCCESS] successfully parsed {len(df)} years of {metric_name} data")
+                return df
+                
+            except requests.exceptions.RequestException as e:
+                if "429" in str(e):
+                    print(f"        rate limited (429), attempt {attempt + 1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        continue
+                    else:
+                        print(f"        [ERROR] max retries reached for {metric_name}, will try alternative sources")
+                        return None
+                else:
+                    print(f"        error fetching {metric_name}: {e}")
+                    if attempt < max_retries - 1:
+                        continue
+                    else:
+                        return None
+                        
+        return None
+    
     def fetch_macrotrends_balance_sheet_item(self, ticker, company_slug, page_slug, metric_name, max_years=15):
         """fetch balance sheet items from Macrotrends (current assets, current liabilities, etc.)"""
         url = f"https://www.macrotrends.net/stocks/charts/{ticker}/{company_slug}/{page_slug}"
@@ -860,7 +1031,7 @@ class DualSourceAnalyzer:
     # ============= YAHOO FINANCE 數據抓取 =============
     
     def get_yahoo_finance_data(self, ticker):
-        """get financial data from Yahoo Finance"""
+        """get financial data from Yahoo Finance (enhanced version with missing metrics)"""
         print("fetching data from Yahoo Finance...")
         
         try:
@@ -915,6 +1086,70 @@ class DualSourceAnalyzer:
             else:
                 print("operating cash flow data not available")
             
+            # =============== 新增：缺失的現金流指標 ===============
+            print("processing additional cash flow metrics...")
+            
+            # 自由現金流 (Free Cash Flow)
+            if 'Free Cash Flow' in cash_flow.index:
+                fcf_data = cash_flow.loc['Free Cash Flow'].dropna()
+                fcf_df = pd.DataFrame({
+                    'Year': [date.year for date in fcf_data.index],
+                    'Free Cash Flow (M USD)': pd.to_numeric(fcf_data.values, errors='coerce') / 1e6
+                }).sort_values('Year', ascending=False)
+                fcf_df['Free Cash Flow (M USD)'] = fcf_df['Free Cash Flow (M USD)'].round(0)
+                yahoo_data['free_cash_flow'] = fcf_df
+                print("free cash flow data fetched successfully")
+            else:
+                print("free cash flow data not available")
+            
+            # 投資現金流 (Investing Cash Flow)
+            investing_labels = ['Cash Flow from Investing', 'Cash Flow From Investing Activities']
+            for label in investing_labels:
+                if label in cash_flow.index:
+                    icf_data = cash_flow.loc[label].dropna()
+                    icf_df = pd.DataFrame({
+                        'Year': [date.year for date in icf_data.index],
+                        'Cash Flow from Investing (M USD)': pd.to_numeric(icf_data.values, errors='coerce') / 1e6
+                    }).sort_values('Year', ascending=False)
+                    icf_df['Cash Flow from Investing (M USD)'] = icf_df['Cash Flow from Investing (M USD)'].round(0)
+                    yahoo_data['cash_flow_investing'] = icf_df
+                    print(f"investing cash flow data fetched successfully (using: {label})")
+                    break
+            else:
+                print("investing cash flow data not available")
+            
+            # 融資現金流 (Financing Cash Flow)
+            financing_labels = ['Cash Flow from Financing', 'Cash Flow From Financial Activities', 'Cash Flow From Financing Activities']
+            for label in financing_labels:
+                if label in cash_flow.index:
+                    fcf_data = cash_flow.loc[label].dropna()
+                    fcf_df = pd.DataFrame({
+                        'Year': [date.year for date in fcf_data.index],
+                        'Cash Flow from Financing (M USD)': pd.to_numeric(fcf_data.values, errors='coerce') / 1e6
+                    }).sort_values('Year', ascending=False)
+                    fcf_df['Cash Flow from Financing (M USD)'] = fcf_df['Cash Flow from Financing (M USD)'].round(0)
+                    yahoo_data['cash_flow_financing'] = fcf_df
+                    print(f"financing cash flow data fetched successfully (using: {label})")
+                    break
+            else:
+                print("financing cash flow data not available")
+            
+            # 現金及約當現金 (Cash and Cash Equivalents)
+            cash_labels = ['Cash', 'Cash And Cash Equivalents', 'Cash Cash Equivalents And Short Term Investments']
+            for label in cash_labels:
+                if label in balance_sheet.index:
+                    cash_data = balance_sheet.loc[label].dropna()
+                    cash_df = pd.DataFrame({
+                        'Year': [date.year for date in cash_data.index],
+                        'Cash and Cash Equivalents (M USD)': pd.to_numeric(cash_data.values, errors='coerce') / 1e6
+                    }).sort_values('Year', ascending=False)
+                    cash_df['Cash and Cash Equivalents (M USD)'] = cash_df['Cash and Cash Equivalents (M USD)'].round(0)
+                    yahoo_data['cash_and_cash_equivalents'] = cash_df
+                    print(f"cash and cash equivalents data fetched successfully (using: {label})")
+                    break
+            else:
+                print("cash and cash equivalents data not available")
+            
             # 股東權益 (Stockholders' Equity)
             print("processing shareholder equity data...")
             equity_labels = ['Stockholders Equity', 'Total Stockholder Equity', 'Shareholders Equity']
@@ -936,8 +1171,8 @@ class DualSourceAnalyzer:
             if not equity_found:
                 print("shareholder equity data not available")
             
-            # =============== 新增：资产负债表指标（基于 final_scraper.py 的成功经验）===============
-            print("processing balance sheet metrics...")
+            # =============== 擴展：資產負債表指標 ===============
+            print("processing enhanced balance sheet metrics...")
             
             # 总资产 (Total Assets)
             if 'Total Assets' in balance_sheet.index:
@@ -952,8 +1187,8 @@ class DualSourceAnalyzer:
             else:
                 print("total assets data not available")
             
-            # 总负债 (Total Liabilities)
-            total_liab_labels = ['Total Liab', 'Total Liabilities']
+            # 总负债 (Total Liabilities) - 擴展搜索標籤
+            total_liab_labels = ['Total Liab', 'Total Liabilities', 'Total Liabilities Net Minority Interest']
             liab_found = False
             for label in total_liab_labels:
                 if label in balance_sheet.index:
@@ -970,6 +1205,27 @@ class DualSourceAnalyzer:
             
             if not liab_found:
                 print("total liabilities data not available")
+                # 嘗試通過計算獲得：總資產 - 股東權益 = 總負債
+                if 'total_assets' in yahoo_data and 'equity' in yahoo_data:
+                    assets_df = yahoo_data['total_assets']
+                    equity_df = yahoo_data['equity']
+                    
+                    # 合併數據計算總負債
+                    merged_df = pd.merge(
+                        assets_df[['Year', 'Total Assets (M USD)']],
+                        equity_df[['Year', 'Shareholders Equity (M USD)']],
+                        on='Year',
+                        how='inner'
+                    )
+                    
+                    if not merged_df.empty:
+                        calculated_liab_df = pd.DataFrame()
+                        calculated_liab_df['Year'] = merged_df['Year']
+                        calculated_liab_df['Total Liabilities (M USD)'] = (
+                            merged_df['Total Assets (M USD)'] - merged_df['Shareholders Equity (M USD)']
+                        ).round(0)
+                        yahoo_data['total_liabilities'] = calculated_liab_df
+                        print(f"total liabilities calculated successfully: {len(calculated_liab_df)} years")
             
             # 长期负债 (Long Term Debt)
             if 'Long Term Debt' in balance_sheet.index:
@@ -983,6 +1239,25 @@ class DualSourceAnalyzer:
                 print("long term debt data fetched successfully")
             else:
                 print("long term debt data not available")
+            
+            # 保留盈餘 (Retained Earnings) - 擴展搜索標籤
+            retained_earnings_labels = ['Retained Earnings', 'Retained Earnings Accumulated Deficit', 'Accumulated Deficit']
+            re_found = False
+            for label in retained_earnings_labels:
+                if label in balance_sheet.index:
+                    re_data = balance_sheet.loc[label].dropna()
+                    re_df = pd.DataFrame({
+                        'Year': [date.year for date in re_data.index],
+                        'Retained Earnings (M USD)': pd.to_numeric(re_data.values, errors='coerce') / 1e6
+                    }).sort_values('Year', ascending=False)
+                    re_df['Retained Earnings (M USD)'] = re_df['Retained Earnings (M USD)'].round(0)
+                    yahoo_data['retained_earnings_balance'] = re_df
+                    print(f"retained earnings data fetched successfully (using: {label})")
+                    re_found = True
+                    break
+            
+            if not re_found:
+                print("retained earnings data not available")
             
             # 流动资产 (Current Assets)
             print("checking Current Assets in balance sheet...")
@@ -1035,40 +1310,166 @@ class DualSourceAnalyzer:
                     yahoo_data['current_ratio'] = current_ratio_df
                     print("current ratio calculation successful")
             
-            # =============== 新增：SEC文件歷史數據補充（針對2016-2020年缺失數據）===============
-            print("checking and supplementing SEC file historical data...")
+            # =============== 新增：如果自由現金流缺失，嘗試計算 ===============
+            if 'free_cash_flow' not in yahoo_data and 'cash_flow' in yahoo_data:
+                print("attempting to calculate free cash flow...")
+                
+                # 方法1：嘗試從現金流表獲取資本支出
+                capex_labels = ['Capital Expenditure', 'Capital Expenditures', 'Capex']
+                capex_found = False
+                
+                for label in capex_labels:
+                    if label in cash_flow.index:
+                        capex_data = cash_flow.loc[label].dropna()
+                        ocf_df = yahoo_data['cash_flow']
+                        
+                        capex_df = pd.DataFrame({
+                            'Year': [date.year for date in capex_data.index],
+                            'Capex': pd.to_numeric(capex_data.values, errors='coerce') / 1e6
+                        })
+                        
+                        # 合併營運現金流和資本支出
+                        merged_fcf = pd.merge(
+                            ocf_df[['Year', 'Operating Cash Flow (M USD)']],
+                            capex_df,
+                            on='Year',
+                            how='inner'
+                        )
+                        
+                        if not merged_fcf.empty:
+                            fcf_calculated_df = pd.DataFrame()
+                            fcf_calculated_df['Year'] = merged_fcf['Year']
+                            # 自由現金流 = 營運現金流 - 資本支出（絕對值）
+                            fcf_calculated_df['Free Cash Flow (M USD)'] = (
+                                merged_fcf['Operating Cash Flow (M USD)'] - abs(merged_fcf['Capex'])
+                            ).round(0)
+                            yahoo_data['free_cash_flow'] = fcf_calculated_df
+                            print(f"free cash flow calculated successfully: {len(fcf_calculated_df)} years")
+                            capex_found = True
+                            break
+                
+                if not capex_found:
+                    print("cannot calculate free cash flow - capex data not available")
+            
+            # =============== 歷史數據補充（三重數據源：SEC + Alpha Vantage）===============
+            print("checking and supplementing historical data from multiple sources...")
+            
+            # 1. 首先嘗試 SEC API
             sec_historical_data = self.get_sec_historical_data(ticker)
+            
+            # 2. 然後嘗試 Alpha Vantage（特別是針對缺失的現金流數據）
+            alpha_vantage_data = None
+            missing_cash_flow_metrics = []
+            for metric in ['free_cash_flow', 'cash_flow_financing', 'cash_flow_investing']:
+                if metric not in yahoo_data or yahoo_data[metric].empty:
+                    missing_cash_flow_metrics.append(metric)
+            
+            if missing_cash_flow_metrics:
+                print(f"     缺失現金流指標: {missing_cash_flow_metrics}")
+                alpha_vantage_data = self.get_alpha_vantage_cash_flow(ticker)
+            
+            # 3. 合併所有數據源
+            cash_flow_metrics = [
+                'current_assets', 'current_liabilities', 'current_ratio',
+                'free_cash_flow', 'cash_flow_investing', 'cash_flow_financing', 
+                'cash_and_cash_equivalents', 'operating_cash_flow'
+            ]
+            
+            data_source_summary = {}
+            
+            # 合併 SEC 數據
             if sec_historical_data:
-                # 合併SEC歷史數據到Yahoo數據中
                 for data_type, sec_df in sec_historical_data.items():
-                    if data_type in ['current_assets', 'current_liabilities', 'current_ratio']:
+                    if data_type in cash_flow_metrics:
                         if data_type not in yahoo_data or yahoo_data[data_type].empty:
-                            # 如果Yahoo數據不存在，直接使用SEC數據
                             yahoo_data[data_type] = sec_df
-                            print(f" SEC historical data supplement: {data_type} ({len(sec_df)} years)")
+                            data_source_summary[data_type] = f"SEC ({len(sec_df)} years)"
+                            print(f" [SEC] historical data supplement: {data_type} ({len(sec_df)} years)")
                         else:
-                            # 合併歷史數據與現有數據
                             existing_df = yahoo_data[data_type]
-                            # 確保沒有重複年份，優先使用Yahoo數據
                             combined_df = pd.concat([existing_df, sec_df]).drop_duplicates(subset=['Year'], keep='first').sort_values('Year', ascending=False)
                             yahoo_data[data_type] = combined_df
                             total_years = len(combined_df)
                             yahoo_years = len(existing_df)
                             sec_years = len(sec_df)
-                            print(f" SEC historical data merged: {data_type} (Total: {total_years} years, Yahoo: {yahoo_years}, SEC: {sec_years})")
-            else:
-                # 檢查流動資產和流動負債數據的完整性
-                print(f" checking {ticker} current assets/liabilities data completeness...")
-                if 'current_assets' in yahoo_data and 'current_liabilities' in yahoo_data:
-                    ca_years = len(yahoo_data['current_assets'])
-                    cl_years = len(yahoo_data['current_liabilities'])
-                    print(f" {ticker} current assets: {ca_years} years (Yahoo only)")
-                    print(f" {ticker} current liabilities: {cl_years} years (Yahoo only)")
-                else:
-                    print(f" {ticker} missing current assets/liabilities data")
+                            data_source_summary[data_type] = f"Yahoo+SEC ({total_years} years: {yahoo_years}+{sec_years})"
+                            print(f" [SEC] historical data merged: {data_type} (Total: {total_years} years)")
             
-            print("balance sheet metrics processing completed")
-            # ==================================================================================
+            # 合併 Alpha Vantage 數據（優先補充缺失的現金流指標）
+            if alpha_vantage_data:
+                for data_type, av_df in alpha_vantage_data.items():
+                    if data_type in cash_flow_metrics:
+                        if data_type not in yahoo_data or yahoo_data[data_type].empty:
+                            yahoo_data[data_type] = av_df
+                            data_source_summary[data_type] = f"Alpha Vantage ({len(av_df)} years)"
+                            print(f" [ALPHA] data supplement: {data_type} ({len(av_df)} years)")
+                        else:
+                            existing_df = yahoo_data[data_type]
+                            combined_df = pd.concat([existing_df, av_df]).drop_duplicates(subset=['Year'], keep='first').sort_values('Year', ascending=False)
+                            yahoo_data[data_type] = combined_df
+                            total_years = len(combined_df)
+                            existing_years = len(existing_df)
+                            av_years = len(av_df)
+                            current_source = data_source_summary.get(data_type, "Yahoo")
+                            data_source_summary[data_type] = f"{current_source}+AV ({total_years} years)"
+                            print(f" [ALPHA] data merged: {data_type} (Total: {total_years} years)")
+            
+            # 顯示多重數據源整合摘要
+            print(f"\n[SUMMARY] Multi-Source Historical Data Enhancement Summary:")
+            for metric in cash_flow_metrics:
+                if metric in yahoo_data and not yahoo_data[metric].empty:
+                    years_count = len(yahoo_data[metric])
+                    year_range = f"{yahoo_data[metric]['Year'].min()}-{yahoo_data[metric]['Year'].max()}"
+                    source_info = data_source_summary.get(metric, f"Yahoo ({years_count} years)")
+                    print(f"   • {metric}: {years_count} years ({year_range}) - {source_info}")
+                else:
+                    print(f"   [MISSING] {metric}: no data available from any source")
+            
+            # 特別檢查關鍵現金流指標的可用性
+            key_metrics = ['free_cash_flow', 'cash_flow_financing', 'cash_and_cash_equivalents']
+            available_key_metrics = 0
+            for metric in key_metrics:
+                if metric in yahoo_data and not yahoo_data[metric].empty:
+                    available_key_metrics += 1
+            
+            completion_rate = available_key_metrics / len(key_metrics) * 100
+            print(f"\n[METRICS] Key Cash Flow Metrics Availability: {available_key_metrics}/{len(key_metrics)} ({completion_rate:.0f}%)")
+            
+            print("enhanced balance sheet metrics processing completed")
+            
+            # =============== 數據完整性報告 ===============
+            print("\n[REPORT] Yahoo Finance Data Completeness Report:")
+            print("=" * 60)
+            
+            complete_metrics = []
+            missing_metrics = []
+            
+            expected_metrics = [
+                'revenue', 'income', 'cash_flow', 'equity',
+                'total_assets', 'total_liabilities', 'long_term_debt',
+                'current_assets', 'current_liabilities', 'current_ratio',
+                'free_cash_flow', 'cash_flow_investing', 'cash_flow_financing',
+                'cash_and_cash_equivalents', 'retained_earnings_balance'
+            ]
+            
+            for metric in expected_metrics:
+                if metric in yahoo_data and not yahoo_data[metric].empty:
+                    years_count = len(yahoo_data[metric])
+                    complete_metrics.append(f"[OK] {metric}: {years_count} years")
+                else:
+                    missing_metrics.append(f"[MISSING] {metric}: not available")
+            
+            print("Complete metrics:")
+            for metric in complete_metrics:
+                print(f"  {metric}")
+            
+            if missing_metrics:
+                print("\nMissing metrics:")
+                for metric in missing_metrics:
+                    print(f"  {metric}")
+            
+            completion_rate = len(complete_metrics) / len(expected_metrics) * 100
+            print(f"\n[TOTAL] Overall completion rate: {completion_rate:.1f}%")
             
             return yahoo_data
             
@@ -1148,25 +1549,141 @@ class DualSourceAnalyzer:
             print(f"     獲取 CIK 失敗: {e}")
             return None
     
-    def parse_sec_financial_data(self, sec_data):
-        """解析 SEC API 返回的財務數據"""
+    def parse_sec_financial_data(self, data):
+        """解析 SEC API 返回的財務數據（擴展版 - 包含現金流數據）"""
         try:
-            facts = sec_data.get('facts', {})
+            facts = data.get('facts', {})
             us_gaap = facts.get('us-gaap', {})
             
-            # 提取流動資產和流動負債
+            # 提取各種財務指標
+            result = {}
+            
+            # 現有的流動資產和流動負債
             current_assets_data = us_gaap.get('AssetsCurrent', {}).get('units', {}).get('USD', [])
             current_liabilities_data = us_gaap.get('LiabilitiesCurrent', {}).get('units', {}).get('USD', [])
             
-            # 轉換為我們需要的格式
-            result = {}
+            # =============== 新增：現金流相關指標 ===============
             
+            # 自由現金流（通過營運現金流 - 資本支出計算）
+            operating_cash_flow_data = us_gaap.get('NetCashProvidedByUsedInOperatingActivities', {}).get('units', {}).get('USD', [])
+            capex_data = us_gaap.get('PaymentsToAcquirePropertyPlantAndEquipment', {}).get('units', {}).get('USD', [])
+            
+            # 融資現金流
+            financing_cash_flow_data = us_gaap.get('NetCashProvidedByUsedInFinancingActivities', {}).get('units', {}).get('USD', [])
+            
+            # 投資現金流  
+            investing_cash_flow_data = us_gaap.get('NetCashProvidedByUsedInInvestingActivities', {}).get('units', {}).get('USD', [])
+            
+            # 現金及約當現金
+            cash_equivalents_data = us_gaap.get('CashAndCashEquivalentsAtCarryingValue', {}).get('units', {}).get('USD', [])
+            if not cash_equivalents_data:
+                # 備用欄位名稱
+                cash_equivalents_data = us_gaap.get('CashCashEquivalentsAndShortTermInvestments', {}).get('units', {}).get('USD', [])
+            
+            # =============== 處理營運現金流數據 ===============
+            if operating_cash_flow_data:
+                ocf_df_data = []
+                for item in operating_cash_flow_data:
+                    if item.get('form') == '10-K':  # 只要年度報告
+                        year = int(item.get('fy', 0))
+                        if 2010 <= year <= 2025:  # 合理的年份範圍
+                            ocf_df_data.append({
+                                'Year': year,
+                                'Operating Cash Flow (M USD)': item.get('val', 0) / 1000000  # 轉換為百萬
+                            })
+                
+                if ocf_df_data:
+                    result['operating_cash_flow'] = pd.DataFrame(ocf_df_data).drop_duplicates('Year').sort_values('Year', ascending=False)
+                    print(f"     SEC營運現金流數據: {len(result['operating_cash_flow'])} 年")
+            
+            # =============== 處理資本支出數據並計算自由現金流 ===============
+            if operating_cash_flow_data and capex_data:
+                ocf_dict = {}
+                capex_dict = {}
+                
+                # 組織營運現金流數據
+                for item in operating_cash_flow_data:
+                    if item.get('form') == '10-K':
+                        year = int(item.get('fy', 0))
+                        if 2010 <= year <= 2025:
+                            ocf_dict[year] = item.get('val', 0) / 1000000
+                
+                # 組織資本支出數據
+                for item in capex_data:
+                    if item.get('form') == '10-K':
+                        year = int(item.get('fy', 0))
+                        if 2010 <= year <= 2025:
+                            capex_dict[year] = abs(item.get('val', 0)) / 1000000  # 資本支出通常是負值，取絕對值
+                
+                # 計算自由現金流
+                fcf_data = []
+                for year in ocf_dict:
+                    if year in capex_dict:
+                        fcf = ocf_dict[year] - capex_dict[year]
+                        fcf_data.append({
+                            'Year': year,
+                            'Free Cash Flow (M USD)': round(fcf, 0)
+                        })
+                
+                if fcf_data:
+                    result['free_cash_flow'] = pd.DataFrame(fcf_data).sort_values('Year', ascending=False)
+                    print(f"     SEC自由現金流計算成功: {len(result['free_cash_flow'])} 年")
+            
+            # =============== 處理融資現金流數據 ===============
+            if financing_cash_flow_data:
+                fcf_df_data = []
+                for item in financing_cash_flow_data:
+                    if item.get('form') == '10-K':
+                        year = int(item.get('fy', 0))
+                        if 2010 <= year <= 2025:
+                            fcf_df_data.append({
+                                'Year': year,
+                                'Cash Flow from Financing (M USD)': item.get('val', 0) / 1000000
+                            })
+                
+                if fcf_df_data:
+                    result['cash_flow_financing'] = pd.DataFrame(fcf_df_data).drop_duplicates('Year').sort_values('Year', ascending=False)
+                    print(f"     SEC融資現金流數據: {len(result['cash_flow_financing'])} 年")
+            
+            # =============== 處理投資現金流數據 ===============
+            if investing_cash_flow_data:
+                icf_df_data = []
+                for item in investing_cash_flow_data:
+                    if item.get('form') == '10-K':
+                        year = int(item.get('fy', 0))
+                        if 2010 <= year <= 2025:
+                            icf_df_data.append({
+                                'Year': year,
+                                'Cash Flow from Investing (M USD)': item.get('val', 0) / 1000000
+                            })
+                
+                if icf_df_data:
+                    result['cash_flow_investing'] = pd.DataFrame(icf_df_data).drop_duplicates('Year').sort_values('Year', ascending=False)
+                    print(f"     SEC投資現金流數據: {len(result['cash_flow_investing'])} 年")
+            
+            # =============== 處理現金及約當現金數據 ===============
+            if cash_equivalents_data:
+                ce_df_data = []
+                for item in cash_equivalents_data:
+                    if item.get('form') == '10-K':
+                        year = int(item.get('fy', 0))
+                        if 2010 <= year <= 2025:
+                            ce_df_data.append({
+                                'Year': year,
+                                'Cash and Cash Equivalents (M USD)': item.get('val', 0) / 1000000
+                            })
+                
+                if ce_df_data:
+                    result['cash_and_cash_equivalents'] = pd.DataFrame(ce_df_data).drop_duplicates('Year').sort_values('Year', ascending=False)
+                    print(f"     SEC現金及約當現金數據: {len(result['cash_and_cash_equivalents'])} 年")
+            
+            # =============== 原有的流動資產和流動負債處理 ===============
             if current_assets_data:
                 ca_df_data = []
                 for item in current_assets_data:
                     if item.get('form') == '10-K':  # 只要年度報告
                         year = int(item.get('fy', 0))
-                        if 2015 <= year <= 2025:  # 合理的年份範圍
+                        if 2010 <= year <= 2025:  # 合理的年份範圍
                             ca_df_data.append({
                                 'Year': year,
                                 'Current Assets (M USD)': item.get('val', 0) / 1000000  # 轉換為百萬
@@ -1180,7 +1697,7 @@ class DualSourceAnalyzer:
                 for item in current_liabilities_data:
                     if item.get('form') == '10-K':
                         year = int(item.get('fy', 0))
-                        if 2015 <= year <= 2025:
+                        if 2010 <= year <= 2025:
                             cl_df_data.append({
                                 'Year': year,
                                 'Current Liabilities (M USD)': item.get('val', 0) / 1000000
@@ -1647,6 +2164,17 @@ class DualSourceAnalyzer:
                                     year_data[year]['yahoo']['current_liabilities'] = value
                                 elif data_key == 'current_ratio':
                                     year_data[year]['yahoo']['current_ratio'] = value
+                                # 新增：擴展的Yahoo Finance指標
+                                elif data_key == 'retained_earnings_balance':
+                                    year_data[year]['yahoo']['retained_earnings_balance'] = value
+                                elif data_key == 'free_cash_flow':
+                                    year_data[year]['yahoo']['free_cash_flow'] = value
+                                elif data_key == 'cash_flow_investing':
+                                    year_data[year]['yahoo']['cash_flow_investing'] = value
+                                elif data_key == 'cash_flow_financing':
+                                    year_data[year]['yahoo']['cash_flow_financing'] = value
+                                elif data_key == 'cash_and_cash_equivalents':
+                                    year_data[year]['yahoo']['cash_and_cash_equivalents'] = value
                             except (ValueError, TypeError, IndexError):
                                 continue
         
@@ -1722,6 +2250,148 @@ class DualSourceAnalyzer:
         final_data = self.create_comprehensive_report(comparison_results, ticker, company_name)
         
         return comparison_results, final_data
+    
+    def get_alpha_vantage_cash_flow(self, ticker):
+        """從 Alpha Vantage API 獲取現金流數據作為備用數據源"""
+        try:
+            # Alpha Vantage 免費API密鑰（你可以替換為自己的）
+            # 注意：免費版有請求限制，每分鐘5次，每天500次
+            api_key = "demo"  # 使用demo密鑰進行測試，實際使用請申請自己的密鑰
+            
+            url = f"https://www.alphavantage.co/query"
+            params = {
+                'function': 'CASH_FLOW',
+                'symbol': ticker,
+                'apikey': api_key
+            }
+            
+            print(f"     嘗試從 Alpha Vantage 獲取 {ticker} 現金流數據...")
+            
+            response = requests.get(url, params=params, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                
+                # 檢查API響應是否有效
+                if 'Note' in data:
+                    print(f"     Alpha Vantage API 頻率限制: {data['Note']}")
+                    return None
+                
+                if 'Error Message' in data:
+                    print(f"     Alpha Vantage API 錯誤: {data['Error Message']}")
+                    return None
+                
+                if 'annualReports' not in data:
+                    print(f"     Alpha Vantage API 無年度現金流數據")
+                    return None
+                
+                annual_reports = data['annualReports']
+                result = {}
+                
+                # 處理營運現金流
+                operating_cf_data = []
+                for report in annual_reports:
+                    if 'fiscalDateEnding' in report and 'operatingCashflow' in report:
+                        try:
+                            year = int(report['fiscalDateEnding'][:4])
+                            operating_cf = float(report['operatingCashflow']) / 1000000  # 轉換為百萬
+                            if 2010 <= year <= 2025:
+                                operating_cf_data.append({
+                                    'Year': year,
+                                    'Operating Cash Flow (M USD)': round(operating_cf, 0)
+                                })
+                        except (ValueError, TypeError):
+                            continue
+                
+                if operating_cf_data:
+                    result['operating_cash_flow'] = pd.DataFrame(operating_cf_data).sort_values('Year', ascending=False)
+                    print(f"     Alpha Vantage 營運現金流: {len(result['operating_cash_flow'])} 年")
+                
+                # 處理投資現金流
+                investing_cf_data = []
+                for report in annual_reports:
+                    if 'fiscalDateEnding' in report and 'cashflowFromInvestment' in report:
+                        try:
+                            year = int(report['fiscalDateEnding'][:4])
+                            investing_cf = float(report['cashflowFromInvestment']) / 1000000
+                            if 2010 <= year <= 2025:
+                                investing_cf_data.append({
+                                    'Year': year,
+                                    'Cash Flow from Investing (M USD)': round(investing_cf, 0)
+                                })
+                        except (ValueError, TypeError):
+                            continue
+                
+                if investing_cf_data:
+                    result['cash_flow_investing'] = pd.DataFrame(investing_cf_data).sort_values('Year', ascending=False)
+                    print(f"     Alpha Vantage 投資現金流: {len(result['cash_flow_investing'])} 年")
+                
+                # 處理融資現金流
+                financing_cf_data = []
+                for report in annual_reports:
+                    if 'fiscalDateEnding' in report and 'cashflowFromFinancing' in report:
+                        try:
+                            year = int(report['fiscalDateEnding'][:4])
+                            financing_cf = float(report['cashflowFromFinancing']) / 1000000
+                            if 2010 <= year <= 2025:
+                                financing_cf_data.append({
+                                    'Year': year,
+                                    'Cash Flow from Financing (M USD)': round(financing_cf, 0)
+                                })
+                        except (ValueError, TypeError):
+                            continue
+                
+                if financing_cf_data:
+                    result['cash_flow_financing'] = pd.DataFrame(financing_cf_data).sort_values('Year', ascending=False)
+                    print(f"     [ALPHA] Financing Cash Flow: {len(result['cash_flow_financing'])} years")
+                
+                # 計算自由現金流（如果有營運現金流）
+                if 'operating_cash_flow' in result:
+                    # 嘗試獲取資本支出數據
+                    capex_data = []
+                    for report in annual_reports:
+                        if 'fiscalDateEnding' in report and 'capitalExpenditures' in report:
+                            try:
+                                year = int(report['fiscalDateEnding'][:4])
+                                capex = abs(float(report['capitalExpenditures'])) / 1000000  # 取絕對值並轉換為百萬
+                                if 2010 <= year <= 2025:
+                                    capex_data.append({'Year': year, 'Capex': capex})
+                            except (ValueError, TypeError):
+                                continue
+                    
+                    if capex_data:
+                        capex_df = pd.DataFrame(capex_data)
+                        ocf_df = result['operating_cash_flow']
+                        
+                        # 合併並計算自由現金流
+                        merged_df = pd.merge(
+                            ocf_df[['Year', 'Operating Cash Flow (M USD)']],
+                            capex_df,
+                            on='Year',
+                            how='inner'
+                        )
+                        
+                        if not merged_df.empty:
+                            fcf_data = []
+                            for _, row in merged_df.iterrows():
+                                fcf = row['Operating Cash Flow (M USD)'] - row['Capex']
+                                fcf_data.append({
+                                    'Year': row['Year'],
+                                    'Free Cash Flow (M USD)': round(fcf, 0)
+                                })
+                            
+                            if fcf_data:
+                                result['free_cash_flow'] = pd.DataFrame(fcf_data).sort_values('Year', ascending=False)
+                                print(f"     [ALPHA] Free Cash Flow Calculated: {len(result['free_cash_flow'])} years")
+                
+                return result if result else None
+            
+            else:
+                print(f"     Alpha Vantage API 請求失敗: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            print(f"     Alpha Vantage API 錯誤: {e}")
+            return None
 
 def main():
     """main program - support command line parameters and interactive mode"""

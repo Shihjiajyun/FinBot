@@ -3585,3 +3585,377 @@ body {
     color: white;
     background: rgba(255, 255, 255, 0.1);
 }
+
+/* 股價圖表區域 */
+.stock-chart-section {
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+    padding: 25px 30px;
+}
+
+.stock-chart-section h5 {
+    color: var(--text-color);
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.stock-chart-section h5 i {
+    color: var(--primary-color);
+    text-shadow: 0 0 6px rgba(44, 90, 160, 0.4);
+}
+
+.chart-container {
+    background: var(--dark-sidebar);
+    border-radius: 12px;
+    padding: 20px;
+    height: 450px;
+    position: relative;
+    border: 1px solid var(--border-color);
+}
+
+.chart-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    gap: 15px;
+}
+
+.chart-loading .spinner-border {
+    width: 2rem;
+    height: 2rem;
+    border-color: var(--primary-color);
+    border-right-color: transparent;
+}
+
+.chart-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.chart-error p {
+    margin: 10px 0 5px;
+    font-size: 1.1rem;
+    color: var(--text-color);
+}
+
+.chart-error small {
+    font-size: 0.9rem;
+    opacity: 0.7;
+}
+
+/* 橫向年份表格樣式 */
+.financial-table.horizontal-years {
+    width: 100%;
+    background: var(--table-bg);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--table-border);
+}
+
+.financial-table.horizontal-years thead th {
+    background: var(--table-header-bg);
+    color: var(--text-primary);
+    font-weight: 600;
+    padding: 15px 12px;
+    text-align: center;
+    border-bottom: 2px solid var(--table-border);
+    font-size: 0.9rem;
+}
+
+.financial-table.horizontal-years thead th:first-child {
+    text-align: left;
+    min-width: 180px;
+    max-width: 200px;
+}
+
+.financial-table.horizontal-years tbody tr {
+    border-bottom: 1px solid var(--table-border);
+    transition: background-color 0.2s ease;
+}
+
+.financial-table.horizontal-years tbody tr:hover {
+    background: rgba(44, 90, 160, 0.05);
+}
+
+.financial-table.horizontal-years tbody tr:last-child {
+    border-bottom: none;
+}
+
+.financial-table.horizontal-years .metric-label {
+    background: var(--table-header-bg);
+    color: var(--text-primary);
+    font-weight: 500;
+    padding: 12px 15px;
+    text-align: left;
+    border-right: 1px solid var(--table-border);
+    font-size: 0.9rem;
+    min-width: 180px;
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.financial-table.horizontal-years tbody td:not(.metric-label) {
+    padding: 12px 8px;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-right: 1px solid var(--table-border);
+    min-width: 80px;
+}
+
+.financial-table.horizontal-years tbody td:last-child {
+    border-right: none;
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+    .stock-chart-section {
+        padding: 20px 15px;
+    }
+    
+    .chart-container {
+        height: 350px;
+        padding: 15px 10px;
+    }
+    
+    .financial-table.horizontal-years {
+        font-size: 0.8rem;
+    }
+    
+    .financial-table.horizontal-years .metric-label {
+        min-width: 140px;
+        max-width: 160px;
+        font-size: 0.8rem;
+        padding: 10px 12px;
+    }
+    
+    .financial-table.horizontal-years tbody td:not(.metric-label) {
+        padding: 10px 6px;
+        font-size: 0.75rem;
+        min-width: 60px;
+    }
+    
+    .financial-table.horizontal-years thead th {
+        padding: 12px 8px;
+        font-size: 0.8rem;
+    }
+}
+
+/* === 10-K 財報下載按鈕樣式 === */
+
+.download-files-btn {
+    background: linear-gradient(135deg, #4CAF50, #45A049);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 16px 32px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+    margin: 20px 0;
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.download-files-btn:hover {
+    background: linear-gradient(135deg, #45A049, #4CAF50);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.download-files-btn:active {
+    transform: translateY(0);
+}
+
+.download-files-btn:disabled {
+    background: linear-gradient(135deg, #9E9E9E, #757575);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: 0 2px 8px rgba(158, 158, 158, 0.2);
+}
+
+.download-files-btn i {
+    font-size: 18px;
+    transition: transform 0.3s ease;
+}
+
+.download-files-btn:hover i {
+    transform: scale(1.1);
+}
+
+/* 下載按鈕容器樣式 */
+.no-files-message {
+    text-align: center;
+    padding: 40px 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    border: 2px dashed rgba(255, 255, 255, 0.1);
+    margin: 20px 0;
+}
+
+.no-files-message i.bi-download {
+    font-size: 3rem;
+    color: #4CAF50;
+    margin-bottom: 20px;
+    display: block;
+}
+
+.no-files-message h6 {
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.no-files-message p {
+    color: #8e8ea0;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 24px;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* 解析按鈕樣式 */
+.parse-files-btn {
+    background: linear-gradient(135deg, #FF9800, #F57C00);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 14px 28px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3);
+    text-decoration: none;
+}
+
+.parse-files-btn:hover {
+    background: linear-gradient(135deg, #F57C00, #FF9800);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 152, 0, 0.4);
+}
+
+.parse-files-btn:disabled {
+    background: linear-gradient(135deg, #9E9E9E, #757575);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: 0 2px 8px rgba(158, 158, 158, 0.2);
+}
+
+/* 開始對話按鈕樣式 */
+.start-chat-btn {
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 14px 28px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+    text-decoration: none;
+}
+
+.start-chat-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #1976D2, #2196F3);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+}
+
+.start-chat-btn:disabled {
+    background: linear-gradient(135deg, #9E9E9E, #757575);
+    cursor: not-allowed;
+    opacity: 0.6;
+    transform: none;
+    box-shadow: 0 2px 8px rgba(158, 158, 158, 0.2);
+}
+
+/* 按鈕組合容器 */
+.filing-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 20px 0;
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+    .download-files-btn,
+    .parse-files-btn,
+    .start-chat-btn {
+        width: 100%;
+        max-width: 300px;
+        justify-content: center;
+    }
+    
+    .filing-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .no-files-message {
+        padding: 30px 15px;
+    }
+    
+    .no-files-message p {
+        font-size: 13px;
+    }
+}
+
+/* 載入狀態樣式 */
+.download-files-btn.loading,
+.parse-files-btn.loading {
+    position: relative;
+    color: transparent;
+}
+
+.download-files-btn.loading::after,
+.parse-files-btn.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid transparent;
+    border-top: 2px solid #ffffff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

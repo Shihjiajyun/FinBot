@@ -2,11 +2,21 @@
 
 // 股票查詢功能
 function searchStock() {
-    const ticker = document.getElementById('stock-ticker-input').value.trim().toUpperCase();
+    let ticker = document.getElementById('stock-ticker-input').value.trim().toUpperCase();
+    
     if (!ticker) {
         alert('請輸入股票代號');
         return;
     }
+
+    // 基本股票代號格式驗證（支援所有股票代號）
+    if (!isValidTicker(ticker)) {
+        alert('請輸入有效的股票代號格式（如：AAPL, MSFT, GOOGL）');
+        return;
+    }
+
+    // 更新輸入框顯示標準化後的股票代號
+    document.getElementById('stock-ticker-input').value = ticker;
 
     // 顯示載入狀態
     const resultArea = document.getElementById('stock-result-area');
@@ -14,57 +24,82 @@ function searchStock() {
     resultArea.innerHTML = `
         <div class="stock-loading">
             <div class="spinner-large"></div>
-            <h4>正在查詢 ${ticker} 的股票資訊...</h4>
-            <p>請稍候，正在檢查資料庫並獲取最新數據</p>
+            <h4>正在查詢 ${ticker}...</h4>
+            <p>請稍候，正在獲取股票資訊和財務數據</p>
         </div>
     `;
 
-    // 發送請求到後端
+    // 發送查詢請求
     const formData = new FormData();
     formData.append('action', 'get_stock_info');
     formData.append('ticker', ticker);
 
     fetch('stock_api.php', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // 檢查是否需要分析
-                if (data.status === 'analyzing' && data.needs_analysis) {
-                    showAnalyzingState(ticker, data.message);
-                    // 啟動背景分析
-                    startBackgroundAnalysis(ticker);
-                } else if (data.status === 'analyzing') {
-                    showAnalyzingState(ticker, data.message);
-                    // 開始輪詢檢查分析狀態
-                    pollAnalysisStatus(ticker);
-                } else {
-                    displayStockInfo(data.stock_info, data.financial_data, data.data_freshly_analyzed);
-                }
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 檢查是否需要分析
+            if (data.status === 'analyzing' && data.needs_analysis) {
+                showAnalyzingState(ticker, data.message);
+                // 啟動背景分析
+                startBackgroundAnalysis(ticker);
+            } else if (data.status === 'analyzing') {
+                showAnalyzingState(ticker, data.message);
+                // 開始輪詢檢查分析狀態
+                pollAnalysisStatus(ticker);
             } else {
-                resultArea.innerHTML = `
-                    <div class="stock-error">
-                        <i class="bi bi-exclamation-triangle" style="font-size: 3rem; color: #dc3545; margin-bottom: 20px;"></i>
-                        <h4>查詢失敗</h4>
-                        <p>${data.error}</p>
-                        <button onclick="searchStock()" class="retry-btn">重試</button>
-                    </div>
-                `;
+                displayStockInfo(data.stock_info, data.financial_data, data.data_freshly_analyzed);
             }
-        })
-        .catch(error => {
-            console.error('查詢錯誤:', error);
+        } else {
             resultArea.innerHTML = `
                 <div class="stock-error">
-                    <i class="bi bi-wifi-off" style="font-size: 3rem; color: #dc3545; margin-bottom: 20px;"></i>
-                    <h4>網路錯誤</h4>
-                    <p>無法連接到伺服器，請檢查網路連線</p>
+                    <i class="bi bi-exclamation-triangle" style="font-size: 3rem; color: #dc3545; margin-bottom: 20px;"></i>
+                    <h4>查詢失敗</h4>
+                    <p>${data.error}</p>
                     <button onclick="searchStock()" class="retry-btn">重試</button>
                 </div>
             `;
-        });
+        }
+    })
+    .catch(error => {
+        console.error('查詢錯誤:', error);
+        resultArea.innerHTML = `
+            <div class="stock-error">
+                <i class="bi bi-wifi-off" style="font-size: 3rem; color: #dc3545; margin-bottom: 20px;"></i>
+                <h4>網路錯誤</h4>
+                <p>無法連接到伺服器，請檢查網路連線</p>
+                <button onclick="searchStock()" class="retry-btn">重試</button>
+            </div>
+        `;
+    });
+}
+
+// 驗證股票代號格式（支援所有有效的股票代號格式）
+function isValidTicker(ticker) {
+    // 美股代號通常是1-5個字母，可能包含點號（如 BRK.A）
+    const tickerPattern = /^[A-Z]{1,5}(\.[A-Z])?$/;
+    
+    // 基本格式驗證
+    if (!tickerPattern.test(ticker)) {
+        return false;
+    }
+    
+    // 排除一些明顯無效的格式
+    const invalidPatterns = [
+        /^[0-9]+$/,  // 純數字
+        /^[A-Z]{6,}$/,  // 超過5個字母（不含點號）
+    ];
+    
+    for (let pattern of invalidPatterns) {
+        if (pattern.test(ticker)) {
+            return false;
+        }
+    }
+    
+    return true;
 }
 
 // 顯示分析狀態
@@ -104,7 +139,7 @@ function showAnalyzingState(ticker, message) {
             </div>
             <p class="analyzing-note">
                 <i class="bi bi-info-circle"></i> 
-                首次分析該股票需要 2-5 分鐘，我們正在從多個數據源獲取完整的財務資訊
+                首次分析該股票需要 2 分鐘，我們正在從多個數據源獲取完整的財務資訊
             </p>
         </div>
     `;
@@ -276,6 +311,17 @@ function quickSearch(ticker) {
 function displayStockInfo(stockInfo, financialData, freshlyAnalyzed = false) {
     const resultArea = document.getElementById('stock-result-area');
 
+    // 添加調試日誌，檢查stockInfo數據
+    console.log('📊 顯示股票資訊:', {
+        symbol: stockInfo.symbol,
+        market_cap: stockInfo.market_cap,
+        market_cap_type: typeof stockInfo.market_cap,
+        current_price: stockInfo.current_price,
+        pe_ratio: stockInfo.pe_ratio,
+        eps: stockInfo.eps,
+        dividend_yield: stockInfo.dividend_yield
+    });
+
     let financialTable = '';
     if (financialData && financialData.growth_rates && financialData.growth_rates.length > 0) {
         // 添加數據範圍信息
@@ -288,7 +334,7 @@ function displayStockInfo(stockInfo, financialData, freshlyAnalyzed = false) {
                 <h5><i class="bi bi-graph-up-arrow"></i> 歷年財務增長率分析</h5>
                 ${dataRangeInfo}
                 <div class="financial-table-container">
-                    ${generateVerticalGrowthTable(financialData.growth_rates)}
+                    ${generateHorizontalGrowthTable(financialData.growth_rates)}
                 </div>
             </div>
         `;
@@ -310,7 +356,7 @@ function displayStockInfo(stockInfo, financialData, freshlyAnalyzed = false) {
             <div class="financial-section">
                 <h5><i class="bi bi-clipboard-data"></i> 財務絕對數值指標與比率分析</h5>
                 <div class="financial-table-container">
-                    ${generateVerticalAbsoluteMetricsTable(financialData.absolute_metrics)}
+                    ${generateHorizontalAbsoluteMetricsTable(financialData.absolute_metrics)}
                 </div>
             </div>
         `;
@@ -332,7 +378,7 @@ function displayStockInfo(stockInfo, financialData, freshlyAnalyzed = false) {
             <div class="financial-section">
                 <h5><i class="bi bi-clipboard-data"></i> 歷史資產負債表財務狀況（獲利能力和流動性）</h5>
                 <div class="financial-table-container">
-                    ${generateVerticalBalanceSheetTable(financialData.balance_sheet_data)}
+                    ${generateHorizontalBalanceSheetTable(financialData.balance_sheet_data)}
                 </div>
             </div>
         `;
@@ -397,6 +443,17 @@ function displayStockInfo(stockInfo, financialData, freshlyAnalyzed = false) {
             </div>
         </div>
 
+        <!-- 股價走勢圖區域 -->
+        <div class="stock-chart-section">
+            <h5><i class="bi bi-graph-up"></i> 股價走勢圖（近6個月）</h5>
+            <div class="chart-container" id="stock-price-chart-container">
+                <div class="chart-loading">
+                    <div class="spinner-border" role="status"></div>
+                    <span>正在載入股價數據...</span>
+                </div>
+            </div>
+        </div>
+
         <!-- 財務分析區塊 -->
         <div class="financial-analysis-container">
             ${financialTable}
@@ -411,11 +468,16 @@ function displayStockInfo(stockInfo, financialData, freshlyAnalyzed = false) {
         </div>
     `;
 
+    // 異步載入股價數據
+    loadStockPriceChart(stockInfo.symbol);
+
     // 異步載入10-K檔案列表
     console.log('🚀 準備調用 getTenKFiles，股票代號:', stockInfo.symbol);
     getTenKFiles(stockInfo.symbol).then(tenKFilesHtml => {
         console.log('✅ getTenKFiles 完成，更新 HTML');
         document.getElementById('ten-k-files-section').innerHTML = tenKFilesHtml;
+        // 添加checkbox監聽器
+        addFilingCheckboxListeners();
     }).catch(error => {
         console.error('❌ getTenKFiles 失敗:', error);
     });
@@ -610,6 +672,22 @@ function displayConversationHistory(conversations) {
         const ticker = titleParts[0] || 'Unknown';
         const fileInfo = titleParts.slice(1).join('_') || '對話';
         
+        // 從檔案資訊中提取年份或處理特殊情況
+        let displayFileInfo = fileInfo;
+        if (fileInfo !== '對話') {
+            // 檢查是否是檔案名稱格式
+            const yearMatch = fileInfo.match(/(\d{4})/);
+            if (yearMatch) {
+                displayFileInfo = `${yearMatch[1]} 年`;
+            } else if (fileInfo.toLowerCase().includes('all')) {
+                displayFileInfo = '全部財報';
+            } else if (fileInfo.includes('.txt') || fileInfo.includes('.htm')) {
+                // 如果是完整檔案名，嘗試提取年份
+                const filenameYear = extractYearFromFilename(fileInfo);
+                displayFileInfo = filenameYear !== fileInfo ? `${filenameYear} 年` : '財報對話';
+            }
+        }
+        
         // 格式化時間
         const timeAgo = formatTimeAgo(conv.updated_at);
         
@@ -628,7 +706,7 @@ function displayConversationHistory(conversations) {
                                    style="width: 100%; font-size: 12px; padding: 2px 4px; border: 1px solid #ccc; border-radius: 3px;">
                         </div>
                         <div style="font-size: 12px; color: #8e8ea0; margin-top: 2px;">
-                            ${fileInfo}
+                            ${displayFileInfo}
                         </div>
                         <div style="font-size: 11px; color: #666; margin-top: 4px;">
                             ${conv.question_count} 個問題 • ${timeAgo}
@@ -761,85 +839,46 @@ function openConversation(conversationId, title) {
     window.location.href = url;
 }
 
+// 從10-K檔案名稱中提取年份
+function extractYearFromFilename(filename) {
+    // 支持多種檔案名稱格式
+    // 例如: AAPL_10-K_2023.txt, MSFT-10K-2022.pdf, TSLA_2021_10-K.txt 等
+    const yearMatch = filename.match(/20\d{2}/);
+    return yearMatch ? yearMatch[0] : filename;
+}
+
 // 獲取10-K檔案列表
 function getTenKFiles(ticker) {
     console.log('🔍 開始獲取10-K檔案，股票代號:', ticker);
     
-    const formData = new FormData();
-    formData.append('action', 'get_10k_files');
-    formData.append('ticker', ticker);
+    // 首先檢查解析過的財報
+    const parsedFormData = new FormData();
+    parsedFormData.append('action', 'check_parsed_filings');
+    parsedFormData.append('ticker', ticker);
 
-    // 驗證 FormData 內容
-    console.log('📤 發送10-K API請求，參數:', {action: 'get_10k_files', ticker: ticker});
-    for (let [key, value] of formData.entries()) {
-        console.log('📝 FormData 欄位:', key, '=', value);
-    }
-
-    return fetch('stock_api.php', {
+    return fetch('parse_filings.php', {
             method: 'POST',
-            body: formData
+            body: parsedFormData
         })
-        .then(response => {
-            console.log('📥 收到10-K API響應，狀態:', response.status);
-            return response.json();
-        })
-        .then(data => {
-            console.log('🗂️ 10-K 檔案 API 回應:', data); // 調試信息
+        .then(response => response.json())
+        .then(parsedData => {
+            console.log('🗃️ 解析的財報檢查結果:', parsedData);
             
-            // 修正邏輯：檢查是否有檔案數據，而不是只檢查 success
-            if (data.files && Array.isArray(data.files) && data.files.length > 0) {
-                return `
-                    <div class="financial-section">
-                        <h5><i class="bi bi-file-earmark-text"></i> 10-K 財報檔案</h5>
-                        <div class="ten-k-files-container">
-                            <div class="files-grid">
-                                <!-- ALL 按鈕 -->
-                                <div class="file-item all-files-btn" onclick="openTenKChat('${ticker}', 'ALL')">
-                                    <div class="file-icon">
-                                        <i class="bi bi-collection"></i>
-                                    </div>
-                                    <div class="file-info">
-                                        <div class="file-name">所有 10-K 檔案</div>
-                                        <div class="file-details">
-                                            <small>與所有 10-K 檔案對話</small>
-                                        </div>
-                                    </div>
-                                </div>
-                                <!-- 個別檔案 -->
-                                ${data.files.map(file => `
-                                    <div class="file-item" onclick="openTenKChat('${ticker}', '${file.filename}')">
-                                        <div class="file-icon">
-                                            <i class="bi bi-file-earmark-text"></i>
-                                        </div>
-                                        <div class="file-info">
-                                            <div class="file-name">${file.filename}</div>
-                                            <div class="file-details">
-                                                <small>檔案大小: ${file.size || 'N/A'}</small>
-                                                <small>修改時間: ${file.date || 'N/A'}</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            } else {
-                // 顯示詳細的錯誤信息用於調試
-                const errorMessage = data.error || '目前沒有找到該股票的10-K檔案';
-                const debugInfo = data.debug_info ? JSON.stringify(data.debug_info, null, 2) : '';
+            // 同時檢查下載狀態
+            const downloadFormData = new FormData();
+            downloadFormData.append('action', 'check_download_status');
+            downloadFormData.append('ticker', ticker);
+            
+            return fetch('download_filings.php', {
+                method: 'POST',
+                body: downloadFormData
+            })
+            .then(response => response.json())
+            .then(downloadData => {
+                console.log('📁 下載狀態檢查結果:', downloadData);
                 
-                return `
-                    <div class="financial-section">
-                        <h5><i class="bi bi-file-earmark-text"></i> 10-K 財報檔案</h5>
-                        <div class="no-data-message">
-                            <p>${errorMessage}</p>
-                            <small>系統將持續更新財報檔案</small>
-                            ${debugInfo ? `<details style="margin-top: 10px;"><summary>調試信息</summary><pre style="font-size: 10px; text-align: left;">${debugInfo}</pre></details>` : ''}
-                        </div>
-                    </div>
-                `;
-            }
+                return generateTenKFilesHTML(ticker, parsedData, downloadData);
+            });
         })
         .catch(error => {
             console.error('獲取10-K檔案錯誤:', error);
@@ -855,7 +894,320 @@ function getTenKFiles(ticker) {
         });
 }
 
-// 開啟10-K檔案聊天室
+function generateTenKFilesHTML(ticker, parsedData, downloadData) {
+    const hasParsedFiles = parsedData.success && parsedData.filings && parsedData.filings.length > 0;
+    const hasDownloadedFiles = downloadData.success && downloadData.files && Object.keys(downloadData.files).length > 0;
+    
+    // 如果有解析過的財報，顯示財報選擇界面
+    if (hasParsedFiles) {
+        const allFilesCheckboxes = parsedData.filings.map(filing => {
+            const summaryStatus = filing.summary_status || 'not_started';
+            const summaryIcon = summaryStatus === 'completed' ? 'check-circle-fill text-success' : 
+                               summaryStatus === 'processing' ? 'clock text-warning' : 
+                               'circle text-muted';
+            
+            return `
+                <div class="filing-checkbox-item">
+                    <input type="checkbox" id="filing-${filing.id}" value="${filing.id}" class="filing-checkbox">
+                    <label for="filing-${filing.id}" class="filing-label">
+                        <div class="filing-info">
+                            <span class="filing-year">${filing.year} 年</span>
+                            <small class="filing-details">
+                                10-K 財報 • ${filing.report_date || '日期未知'}
+                            </small>
+                        </div>
+                        <div class="filing-status">
+                            <i class="bi bi-${summaryIcon}" title="${summaryStatus === 'completed' ? '已摘要' : summaryStatus === 'processing' ? '摘要中' : '未摘要'}"></i>
+                        </div>
+                    </label>
+                </div>
+            `;
+        }).join('');
+        
+        return `
+            <div class="financial-section">
+                <h5><i class="bi bi-file-earmark-text"></i> 10-K 財報檔案</h5>
+                <div class="ten-k-files-container">
+                    <div class="filing-selection-controls">
+                        <div class="selection-buttons">
+                            <button class="select-all-btn" onclick="selectAllFilings(true)">
+                                <i class="bi bi-check-square"></i> 全選
+                            </button>
+                            <button class="select-none-btn" onclick="selectAllFilings(false)">
+                                <i class="bi bi-square"></i> 全不選
+                            </button>
+                        </div>
+                        <button class="start-chat-btn" onclick="startTenKChat('${ticker}')" disabled>
+                            <i class="bi bi-chat-dots"></i> 開始對話
+                        </button>
+                    </div>
+                    
+                    <div class="filing-selection-list">
+                        ${allFilesCheckboxes}
+                    </div>
+                    
+                    <p class="filing-help-text">
+                        <i class="bi bi-info-circle"></i>
+                        選擇您想要分析的財報年份，然後點擊「開始對話」來與 FinBot 討論這些財報內容。
+                    </p>
+                </div>
+            </div>
+        `;
+    }
+    
+    // 如果有下載的檔案但未解析，顯示解析按鈕
+    if (hasDownloadedFiles) {
+        const filesList = Object.values(downloadData.files).map(file => 
+            `<li>${file.year} 年 (${file.filename})</li>`
+        ).join('');
+        
+        return `
+            <div class="financial-section">
+                <h5><i class="bi bi-file-earmark-text"></i> 10-K 財報檔案</h5>
+                <div class="ten-k-files-container">
+                    <div class="download-status">
+                        <i class="bi bi-check-circle text-success"></i>
+                        <span>已下載 ${Object.keys(downloadData.files).length} 份財報</span>
+                    </div>
+                    
+                    <div class="downloaded-files-list">
+                        <ul>${filesList}</ul>
+                    </div>
+                    
+                    <div class="parse-section">
+                        <p>財報已下載，需要解析後才能開始對話：</p>
+                        <button class="parse-files-btn" onclick="parseDownloadedFiles('${ticker}')">
+                            <i class="bi bi-gear"></i> 解析財報
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // 如果沒有任何檔案，顯示下載選項
+    return `
+        <div class="financial-section">
+            <h5><i class="bi bi-file-earmark-text"></i> 10-K 財報檔案</h5>
+            <div class="ten-k-files-container">
+                <div class="no-files-message">
+                    <i class="bi bi-download"></i>
+                    <h6>尚未下載 ${ticker} 的 10-K 財報</h6>
+                    <p>點擊下方按鈕下載最近 5 年的 10-K 財報，下載後系統會自動解析並準備對話功能。</p>
+                    
+                    <button class="download-files-btn" onclick="downloadTenKFiles('${ticker}')">
+                        <i class="bi bi-cloud-download"></i> 下載 10-K 財報
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// 全選/取消選擇檔案
+function selectAllFilings(selectAll) {
+    const checkboxes = document.querySelectorAll('.filing-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll;
+    });
+    updateStartChatButton();
+}
+
+// 更新開始對話按鈕狀態
+function updateStartChatButton() {
+    const checkboxes = document.querySelectorAll('.filing-checkbox:checked');
+    const startBtn = document.querySelector('.start-chat-btn');
+    if (startBtn) {
+        startBtn.disabled = checkboxes.length === 0;
+    }
+}
+
+// 開始10-K對話
+function startTenKChat(ticker) {
+    const checkedBoxes = document.querySelectorAll('.filing-checkbox:checked');
+    if (checkedBoxes.length === 0) {
+        alert('請至少選擇一份財報');
+        return;
+    }
+    
+    const filingIds = Array.from(checkedBoxes).map(cb => cb.value);
+    console.log('開始對話，選中的財報ID:', filingIds);
+    
+    // 顯示 loading 狀態
+    showSummaryLoadingState(ticker, filingIds);
+    
+    // 發送摘要請求
+    const formData = new FormData();
+    formData.append('action', 'summarize_filings');
+    formData.append('ticker', ticker);
+    formData.append('filing_ids', JSON.stringify(filingIds));
+    
+    fetch('summarize_filings.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('摘要完成:', data);
+            // 跳轉到對話頁面
+            const params = new URLSearchParams({
+                ticker: ticker,
+                filing_ids: filingIds.join(','),
+                mode: 'summary'
+            });
+            window.location.href = `tenk_chat.php?${params.toString()}`;
+        } else {
+            alert('摘要過程失敗: ' + data.error);
+            hideSummaryLoadingState();
+        }
+    })
+    .catch(error => {
+        console.error('摘要請求失敗:', error);
+        alert('摘要請求失敗，請稍後再試');
+        hideSummaryLoadingState();
+    });
+}
+
+// 顯示摘要 loading 狀態
+function showSummaryLoadingState(ticker, filingIds) {
+    const loadingOverlay = document.createElement('div');
+    loadingOverlay.id = 'summary-loading-overlay';
+    loadingOverlay.innerHTML = `
+        <div class="summary-loading-modal">
+            <div class="summary-loading-content">
+                <div class="loading-animation">
+                    <div class="spinner-large"></div>
+                    <div class="loading-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+                <h3>🤖 FinBot 正在讀取財報</h3>
+                <p>正在使用 GPT 分析 ${ticker} 的 ${filingIds.length} 份 10-K 財報...</p>
+                <div class="loading-steps">
+                    <div class="step active">
+                        <i class="bi bi-file-text"></i> 準備財報數據
+                    </div>
+                    <div class="step">
+                        <i class="bi bi-robot"></i> GPT 摘要分析
+                    </div>
+                    <div class="step">
+                        <i class="bi bi-chat-dots"></i> 準備對話界面
+                    </div>
+                </div>
+                <p class="loading-note">
+                    <i class="bi bi-info-circle"></i> 
+                    這可能需要 1-2 分鐘，請耐心等候...
+                </p>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(loadingOverlay);
+}
+
+// 隱藏摘要 loading 狀態
+function hideSummaryLoadingState() {
+    const overlay = document.getElementById('summary-loading-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+}
+
+// 下載10-K檔案
+function downloadTenKFiles(ticker) {
+    const downloadBtn = document.querySelector('.download-files-btn');
+    if (downloadBtn) {
+        downloadBtn.disabled = true;
+        downloadBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> 下載中...';
+    }
+    
+    const formData = new FormData();
+    formData.append('action', 'download_10k_filings');
+    formData.append('ticker', ticker);
+    
+    fetch('download_filings.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('下載完成:', data);
+            // 自動開始解析
+            parseDownloadedFiles(ticker);
+        } else {
+            alert('下載失敗: ' + data.error);
+            if (downloadBtn) {
+                downloadBtn.disabled = false;
+                downloadBtn.innerHTML = '<i class="bi bi-cloud-download"></i> 下載 10-K 財報';
+            }
+        }
+    })
+    .catch(error => {
+        console.error('下載失敗:', error);
+        alert('下載請求失敗，請稍後再試');
+        if (downloadBtn) {
+            downloadBtn.disabled = false;
+            downloadBtn.innerHTML = '<i class="bi bi-cloud-download"></i> 下載 10-K 財報';
+        }
+    });
+}
+
+// 解析下載的檔案
+function parseDownloadedFiles(ticker) {
+    const parseBtn = document.querySelector('.parse-files-btn') || document.querySelector('.download-files-btn');
+    if (parseBtn) {
+        parseBtn.disabled = true;
+        parseBtn.innerHTML = '<i class="bi bi-gear"></i> 解析中...';
+    }
+    
+    const formData = new FormData();
+    formData.append('action', 'parse_10k_filings');
+    formData.append('ticker', ticker);
+    
+    fetch('parse_filings.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('解析完成:', data);
+            // 重新載入10-K檔案區域
+            getTenKFiles(ticker).then(html => {
+                document.getElementById('ten-k-files-section').innerHTML = html;
+                // 添加checkbox監聽器
+                addFilingCheckboxListeners();
+            });
+        } else {
+            alert('解析失敗: ' + data.error);
+            if (parseBtn) {
+                parseBtn.disabled = false;
+                parseBtn.innerHTML = '<i class="bi bi-gear"></i> 解析財報';
+            }
+        }
+    })
+    .catch(error => {
+        console.error('解析失敗:', error);
+        alert('解析請求失敗，請稍後再試');
+        if (parseBtn) {
+            parseBtn.disabled = false;
+            parseBtn.innerHTML = '<i class="bi bi-gear"></i> 解析財報';
+        }
+    });
+}
+
+// 添加檔案checkbox監聽器
+function addFilingCheckboxListeners() {
+    const checkboxes = document.querySelectorAll('.filing-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateStartChatButton);
+    });
+}
+
+// 開啟10-K檔案聊天室（保留舊版本兼容性）
 function openTenKChat(ticker, filename) {
     // 檢查是否為所有檔案模式
     const isAllFiles = filename === 'ALL';
@@ -1803,4 +2155,264 @@ function scrollToCurrentStockQA() {
 // 在頁面載入時初始化滾動監控
 document.addEventListener('DOMContentLoaded', function() {
     initStockScrollMonitoring();
-}); 
+});
+
+// 載入股價走勢圖
+function loadStockPriceChart(ticker) {
+    const chartContainer = document.getElementById('stock-price-chart-container');
+    if (!chartContainer) return;
+
+    // 發送請求獲取股價數據
+    const formData = new FormData();
+    formData.append('action', 'get_stock_price_data');
+    formData.append('ticker', ticker);
+    formData.append('period', '6mo'); // 近6個月
+
+    fetch('stock_api.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.price_data) {
+            renderStockPriceChart(data.price_data, ticker);
+        } else {
+            showChartError(data.error || '無法載入股價數據');
+        }
+    })
+    .catch(error => {
+        console.error('載入股價數據失敗:', error);
+        showChartError('網路錯誤，無法載入股價數據');
+    });
+}
+
+// 渲染股價走勢圖
+function renderStockPriceChart(priceData, ticker) {
+    const chartContainer = document.getElementById('stock-price-chart-container');
+    if (!chartContainer) return;
+
+    // 創建canvas元素
+    chartContainer.innerHTML = `
+        <canvas id="stock-price-chart" style="max-height: 400px;"></canvas>
+    `;
+
+    const canvas = document.getElementById('stock-price-chart');
+    if (!canvas) return;
+
+    try {
+        // 準備圖表數據
+        const labels = priceData.map(item => {
+            const date = new Date(item.date);
+            return date.toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' });
+        });
+
+        const prices = priceData.map(item => parseFloat(item.close));
+        const volumes = priceData.map(item => parseInt(item.volume));
+
+        // 計算移動平均線（20日）
+        const movingAverage = calculateMovingAverage(prices, 20);
+
+        const chartData = {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: `${ticker} 收盤價`,
+                        data: prices,
+                        borderColor: '#2c5aa0',
+                        backgroundColor: 'rgba(44, 90, 160, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: 0,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: '20日移動平均',
+                        data: movingAverage,
+                        borderColor: '#ff6b6b',
+                        backgroundColor: 'transparent',
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        fill: false,
+                        pointRadius: 0,
+                        pointHoverRadius: 3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `${ticker} 股價走勢（近6個月）`,
+                        color: '#ffffff',
+                        font: {
+                            size: 16,
+                            weight: 'bold'
+                        }
+                    },
+                    legend: {
+                        display: true,
+                        labels: {
+                            color: '#ffffff',
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        callbacks: {
+                            label: function(context) {
+                                if (context.datasetIndex === 0) {
+                                    return `收盤價: $${context.parsed.y.toFixed(2)}`;
+                                } else {
+                                    return `20日均線: $${context.parsed.y.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: '日期',
+                            color: '#ffffff'
+                        },
+                        ticks: {
+                            color: '#ffffff',
+                            maxTicksLimit: 10
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: '價格 (USD)',
+                            color: '#ffffff'
+                        },
+                        ticks: {
+                            color: '#ffffff',
+                            callback: function(value) {
+                                return '$' + value.toFixed(2);
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                }
+            }
+        };
+
+        new Chart(canvas, chartData);
+        console.log('股價圖表渲染成功');
+
+    } catch (error) {
+        console.error('股價圖表渲染錯誤:', error);
+        showChartError('圖表渲染失敗');
+    }
+}
+
+// 計算移動平均線
+function calculateMovingAverage(prices, period) {
+    const movingAverage = [];
+    
+    for (let i = 0; i < prices.length; i++) {
+        if (i < period - 1) {
+            movingAverage.push(null);
+        } else {
+            const sum = prices.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+            movingAverage.push(sum / period);
+        }
+    }
+    
+    return movingAverage;
+}
+
+// 顯示圖表錯誤
+function showChartError(errorMessage) {
+    const chartContainer = document.getElementById('stock-price-chart-container');
+    if (chartContainer) {
+        chartContainer.innerHTML = `
+            <div class="chart-error">
+                <i class="bi bi-exclamation-triangle" style="font-size: 2rem; color: #dc3545; margin-bottom: 10px;"></i>
+                <p>${errorMessage}</p>
+                <small>請稍後再試或檢查網路連線</small>
+            </div>
+        `;
+    }
+}
+
+// 修復股票數據功能
+function fixStockData(ticker) {
+    if (!ticker) {
+        alert('請提供有效的股票代號');
+        return;
+    }
+    
+    // 顯示修復中狀態
+    const fixButton = document.querySelector('.fix-data-btn');
+    if (fixButton) {
+        fixButton.innerHTML = '<i class="bi bi-hourglass-split"></i> 修復中...';
+        fixButton.disabled = true;
+    }
+    
+    // 調用修復API
+    fetch('php/fix_stock_data.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            ticker: ticker
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 修復成功，顯示結果
+            alert(`${ticker} 數據修復完成！\n數據完整度: ${data.data_completeness}%\n處理年份: ${data.years_processed} 年`);
+            
+            // 重新載入股票數據
+            setTimeout(() => {
+                searchStock();
+            }, 1000);
+        } else {
+            // 修復失敗
+            alert(`修復失敗: ${data.error || '未知錯誤'}`);
+            
+            // 恢復按鈕狀態
+            if (fixButton) {
+                fixButton.innerHTML = '修復數據';
+                fixButton.disabled = false;
+            }
+        }
+    })
+    .catch(error => {
+        console.error('修復數據時發生錯誤:', error);
+        alert('修復數據時發生錯誤，請稍後再試');
+        
+        // 恢復按鈕狀態
+        if (fixButton) {
+            fixButton.innerHTML = '修復數據';
+            fixButton.disabled = false;
+        }
+    });
+} 

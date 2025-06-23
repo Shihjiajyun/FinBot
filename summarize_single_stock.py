@@ -1,33 +1,45 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-10-K Filing Items GPT Summarizer
-========================================
-此腳本讀取 ten_k_filings 表中的原始內容，
-使用 GPT 進行摘要，並將結果存入 ten_k_filings_summary 表
+單一股票 GPT 摘要器
+基於 gpt_summarizer.py，專門處理指定股票的選定財報摘要
 """
 
+import sys
 import mysql.connector
 import openai
-import json
 import time
 import logging
 from datetime import datetime
-from typing import Dict, Optional, Tuple
-import hashlib
-import re
+from typing import Dict, List, Optional
 
-class TenKGPTSummarizer:
-    """10-K 檔案 GPT 摘要處理器"""
+class SingleStockGPTSummarizer:
+    """單一股票 GPT 摘要處理器"""
     
-    def __init__(self, openai_api_key: str, db_config: Dict):
+    def __init__(self, ticker: str, filing_ids: List[int], db_config: Dict = None):
         """
         初始化摘要處理器
         
         Args:
-            openai_api_key: OpenAI API 金鑰
+            ticker: 股票代號
+            filing_ids: 要摘要的財報ID列表
             db_config: 資料庫連接配置
         """
-        self.openai_client = openai.OpenAI(api_key='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')
-        self.db_config = db_config
+        self.ticker = ticker.upper()
+        self.filing_ids = filing_ids
+        
+        self.openai_client = openai.OpenAI(
+            api_key='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'
+        )
+        
+        self.db_config = db_config or {
+            'host': '43.207.210.147',
+            'database': 'finbot_db',
+            'user': 'myuser',
+            'password': '123456789',
+            'charset': 'utf8mb4'
+        }
+        
         self.setup_logging()
         
         # GPT 摘要提示詞模板
@@ -121,11 +133,7 @@ class TenKGPTSummarizer:
         """設置日誌記錄"""
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler('gpt_summarizer.log'),
-                logging.StreamHandler()
-            ]
+            format='%(asctime)s - %(levelname)s - %(message)s'
         )
         self.logger = logging.getLogger(__name__)
         
@@ -138,22 +146,19 @@ class TenKGPTSummarizer:
             self.logger.error(f"資料庫連接失敗: {err}")
             raise
             
-
-            
-    def get_pending_filings(self) -> list:
-        """獲取待處理的 10-K 檔案"""
+    def get_filings_to_process(self) -> List[Dict]:
+        """獲取要處理的 10-K 檔案"""
         connection = self.get_db_connection()
         cursor = connection.cursor(dictionary=True)
         
         try:
-            # 找出還沒有摘要的檔案
-            query = """
+            placeholders = ','.join(['%s'] * len(self.filing_ids))
+            query = f"""
             SELECT f.* FROM ten_k_filings f
-            LEFT JOIN ten_k_filings_summary s ON f.id = s.original_filing_id
-            WHERE s.id IS NULL
+            WHERE f.id IN ({placeholders}) AND f.company_name = %s
             ORDER BY f.report_date DESC
             """
-            cursor.execute(query)
+            cursor.execute(query, self.filing_ids + [self.ticker])
             return cursor.fetchall()
             
         finally:
@@ -174,16 +179,7 @@ class TenKGPTSummarizer:
             return self.summary_prompts['default']
             
     def call_gpt_api(self, prompt: str, max_retries: int = 3) -> Optional[str]:
-        """
-        調用 GPT API 進行摘要
-        
-        Args:
-            prompt: 提示詞
-            max_retries: 最大重試次數
-            
-        Returns:
-            GPT 回應內容或 None
-        """
+        """調用 GPT API 進行摘要"""
         for attempt in range(max_retries):
             try:
                 # 使用 gpt-3.5-turbo 作為便宜的模型選擇
@@ -212,27 +208,15 @@ class TenKGPTSummarizer:
                     
     def estimate_tokens(self, text: str) -> int:
         """估算文本的 token 數量"""
-        # 簡單估算：1個token約等於4個字符（英文）或1.3個字符（中文）
-        # 保守估計使用 1 token = 3 字符
         return len(text) // 3
     
     def summarize_item(self, item_content: str, item_name: str, appendix_content: str = "") -> Optional[str]:
-        """
-        摘要單個 Item
-        
-        Args:
-            item_content: Item 原文內容
-            item_name: Item 名稱 (如 'item_1')
-            appendix_content: 附錄內容
-            
-        Returns:
-            摘要內容或 None
-        """
+        """摘要單個 Item"""
         if not item_content or item_content.strip() == "":
             return None
         
-        # 智能內容截斷，GPT-4-turbo 有128K tokens 上下文
-        max_total_tokens = 20000  # 使用更大的限制，但仍保持合理
+        # 智能內容截斷，gpt-3.5-turbo-16k 有16K tokens 上下文
+        max_total_tokens = 15000  # 使用15K作為安全限制
         max_output_tokens = 2000
         max_input_tokens = max_total_tokens - max_output_tokens
         
@@ -252,13 +236,11 @@ class TenKGPTSummarizer:
         content_chars = content_tokens * 3  # token 轉字符數
         if len(item_content) > content_chars:
             item_content = item_content[:content_chars] + "\n...(內容已截斷)"
-            self.logger.info(f"   主要內容已截斷到 {content_chars} 字符")
             
         # 截斷附錄
         appendix_chars = appendix_tokens * 3
         if len(appendix_content) > appendix_chars:
             appendix_content = appendix_content[:appendix_chars] + "\n...(附錄已截斷)"
-            self.logger.info(f"   附錄內容已截斷到 {appendix_chars} 字符")
         
         # 生成最終 prompt
         prompt = prompt_template.format(
@@ -270,9 +252,6 @@ class TenKGPTSummarizer:
         final_tokens = self.estimate_tokens(prompt)
         self.logger.info(f"開始摘要 {item_name} (估計 {final_tokens} tokens)")
         
-        if final_tokens > max_input_tokens:
-            self.logger.warning(f"   警告: 內容可能仍然過長 ({final_tokens} > {max_input_tokens})")
-        
         summary = self.call_gpt_api(prompt)
         
         if summary:
@@ -283,15 +262,7 @@ class TenKGPTSummarizer:
             return None
             
     def create_summary_record(self, filing_data: Dict) -> int:
-        """
-        創建摘要記錄
-        
-        Args:
-            filing_data: 原始檔案資料
-            
-        Returns:
-            新創建的摘要記錄 ID
-        """
+        """創建摘要記錄"""
         connection = self.get_db_connection()
         cursor = connection.cursor()
         
@@ -302,11 +273,10 @@ class TenKGPTSummarizer:
             ) VALUES (%s, %s, %s, %s, 'processing')
             """
             
-            # 直接使用原始的 company_name（現在已經是股票代號）
             cursor.execute(insert_query, (
                 filing_data['id'],
                 filing_data['file_name'],
-                filing_data['company_name'],  # 現在 company_name 欄位直接存股票代號
+                filing_data['company_name'],  # 現在是股票代號
                 filing_data['report_date']
             ))
             
@@ -364,20 +334,31 @@ class TenKGPTSummarizer:
             connection.close()
             
     def process_filing(self, filing_data: Dict) -> bool:
-        """
-        處理單個 10-K 檔案的摘要
-        
-        Args:
-            filing_data: 檔案資料
-            
-        Returns:
-            處理是否成功
-        """
+        """處理單個 10-K 檔案的摘要"""
         start_time = time.time()
         
         self.logger.info(f"開始處理: {filing_data['file_name']}")
-        self.logger.info(f"   股票代號: {filing_data['company_name']}")  # 現在 company_name 直接是股票代號
+        self.logger.info(f"   股票代號: {filing_data['company_name']}")
         self.logger.info(f"   報告日期: {filing_data['report_date']}")
+        
+        # 檢查是否已有摘要
+        connection = self.get_db_connection()
+        cursor = connection.cursor()
+        
+        try:
+            cursor.execute(
+                "SELECT id FROM ten_k_filings_summary WHERE original_filing_id = %s",
+                (filing_data['id'],)
+            )
+            existing_summary = cursor.fetchone()
+            
+            if existing_summary:
+                self.logger.info(f"   已存在摘要，跳過: {filing_data['file_name']}")
+                return True
+                
+        finally:
+            cursor.close()
+            connection.close()
         
         # 創建摘要記錄
         summary_id = self.create_summary_record(filing_data)
@@ -417,32 +398,25 @@ class TenKGPTSummarizer:
         
         return success_count > 0
         
-    def run_batch_processing(self, max_filings: int = None):
-        """
-        批次處理多個檔案
+    def run_processing(self):
+        """運行摘要處理"""
+        self.logger.info(f"開始處理 {self.ticker} 的指定財報摘要")
+        self.logger.info(f"財報ID: {self.filing_ids}")
         
-        Args:
-            max_filings: 最大處理檔案數，None 表示處理所有
-        """
-        self.logger.info("開始 GPT 摘要批次處理")
+        # 獲取要處理的檔案
+        filings = self.get_filings_to_process()
         
-        # 獲取待處理檔案
-        pending_filings = self.get_pending_filings()
-        
-        if not pending_filings:
-            self.logger.info("沒有待處理的檔案")
-            return
+        if not filings:
+            self.logger.error("沒有找到要處理的財報")
+            return False
             
-        if max_filings:
-            pending_filings = pending_filings[:max_filings]
-            
-        self.logger.info(f"找到 {len(pending_filings)} 個待處理檔案")
+        self.logger.info(f"找到 {len(filings)} 個待處理檔案")
         
         success_count = 0
         
-        for i, filing in enumerate(pending_filings, 1):
+        for i, filing in enumerate(filings, 1):
             try:
-                self.logger.info(f"\n--- 處理進度: {i}/{len(pending_filings)} ---")
+                self.logger.info(f"\n--- 處理進度: {i}/{len(filings)} ---")
                 
                 if self.process_filing(filing):
                     success_count += 1
@@ -451,12 +425,29 @@ class TenKGPTSummarizer:
                 self.logger.error(f"失敗 處理檔案失敗: {filing['file_name']}, 錯誤: {e}")
                 continue
                 
-        self.logger.info(f"\n批次處理完成!")
-        self.logger.info(f"成功: {success_count}/{len(pending_filings)}")
+        self.logger.info(f"\n摘要處理完成!")
+        self.logger.info(f"成功: {success_count}/{len(filings)}")
+        
+        return success_count > 0
 
 
 def main():
-    """主函數 - 配置和運行摘要處理器"""
+    """主函數"""
+    if len(sys.argv) != 3:
+        print("用法: python summarize_single_stock.py <股票代號> <財報ID,以逗號分隔>")
+        print("範例: python summarize_single_stock.py AAPL 1,2,3")
+        sys.exit(1)
+    
+    ticker = sys.argv[1].upper()
+    filing_ids_str = sys.argv[2]
+    
+    try:
+        filing_ids = [int(id.strip()) for id in filing_ids_str.split(',')]
+    except ValueError:
+        print("錯誤: 財報ID必須是數字，以逗號分隔")
+        sys.exit(1)
+    
+    print(f"🚀 開始摘要 {ticker} 的財報: {filing_ids}")
     
     # 資料庫配置
     db_config = {
@@ -467,14 +458,18 @@ def main():
         'charset': 'utf8mb4'
     }
     
-    # OpenAI API 金鑰 (請替換為您的實際金鑰)
-    openai_api_key = "your-openai-api-key-here"
-    
     # 創建摘要處理器
-    summarizer = TenKGPTSummarizer(openai_api_key, db_config)
+    summarizer = SingleStockGPTSummarizer(ticker, filing_ids, db_config)
     
-    # 運行批次處理 (處理所有待處理檔案)
-    summarizer.run_batch_processing(max_filings=None)
+    # 運行處理
+    success = summarizer.run_processing()
+    
+    if success:
+        print(f"🎉 {ticker} 摘要完成!")
+        sys.exit(0)
+    else:
+        print(f"❌ {ticker} 摘要失敗!")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

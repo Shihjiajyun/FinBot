@@ -2,6 +2,10 @@
 // FinBot 系統配置文件
 date_default_timezone_set('Asia/Taipei');
 
+// 設置執行時間限制（針對股票分析）
+ini_set('max_execution_time', 300); // 5分鐘
+set_time_limit(300); // 備用設置
+
 // 環境變數支援 - 優先使用環境變數，再使用預設值
 function getEnvVar($key, $default = null)
 {
