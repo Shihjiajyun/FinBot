@@ -27,28 +27,70 @@ class FinBotProcessor:
         print("   3. 存入資料庫供FinBot查詢")
         print("=" * 50)
 
-    def run_script(self, script_name, description):
+    def run_script(self, script_name, description, timeout=None):
         """執行Python腳本"""
         print(f"\n🔧 開始執行: {description}")
         print(f"⚡ 腳本: {script_name}")
         print("-" * 60)
         
         try:
+            # 設置環境變量
+            env = os.environ.copy()
+            env['PYTHONIOENCODING'] = 'utf-8'
+            env['PYTHONUNBUFFERED'] = '1'  # 確保Python輸出不被緩存
+            
+            # 使用當前Python解釋器路徑
             python_path = sys.executable
-            result = subprocess.run(
-                [python_path, script_name],
-                cwd=Path(__file__).parent,
-                capture_output=False,  # 讓輸出直接顯示
-                text=True
+            
+            # 設置工作目錄
+            work_dir = Path(__file__).parent
+            
+            # 構建完整命令
+            cmd = [python_path, str(work_dir / script_name)]
+            
+            # 執行命令
+            process = subprocess.Popen(
+                cmd,
+                cwd=work_dir,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True,
+                bufsize=1  # 行緩衝
             )
             
-            if result.returncode == 0:
+            # 即時輸出結果
+            while True:
+                output = process.stdout.readline()
+                if output == '' and process.poll() is not None:
+                    break
+                if output:
+                    print(output.strip())
+            
+            # 獲取返回碼和錯誤輸出
+            return_code = process.poll()
+            _, stderr = process.communicate()
+            
+            if return_code == 0:
                 print(f"\n✅ {description} 完成!")
                 return True
             else:
-                print(f"\n❌ {description} 失敗 (錯誤碼: {result.returncode})")
+                if stderr:
+                    print(f"\n❌ {description} 失敗，錯誤信息:")
+                    print(stderr)
+                else:
+                    print(f"\n❌ {description} 失敗 (錯誤碼: {return_code})")
                 return False
                 
+        except KeyboardInterrupt:
+            print(f"\n⚠️ 用戶中斷執行 {script_name}")
+            try:
+                process.terminate()
+                process.wait(timeout=5)  # 等待程序正常終止
+            except:
+                process.kill()  # 如果等待超時，強制終止
+            return False
+            
         except Exception as e:
             print(f"\n💥 執行 {script_name} 時發生錯誤: {e}")
             return False
@@ -133,11 +175,14 @@ def main():
         sys.exit(0)
     
     # 執行完整流程
-    success = processor.run_complete_process()
-    
-    if success:
-        sys.exit(0)
-    else:
+    try:
+        success = processor.run_complete_process()
+        sys.exit(0 if success else 1)
+    except KeyboardInterrupt:
+        print("\n⚠️ 用戶中斷執行")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n💥 執行過程中發生錯誤: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

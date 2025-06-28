@@ -170,7 +170,7 @@ class BatchStockProcessor:
         already_downloaded.sort()
         print(f"🗂️ 已下載的股票: {', '.join(already_downloaded[:10])}{'...' if len(already_downloaded) > 10 else ''}")
         return already_downloaded
-
+        
     def setup_logging(self):
         """設置日誌記錄"""
         log_format = '%(asctime)s - %(levelname)s - %(message)s'
