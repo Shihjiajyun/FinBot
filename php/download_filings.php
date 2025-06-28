@@ -24,25 +24,23 @@ if ($action === 'download_10k_filings') {
     }
 
     try {
-        // 檢查是否已有下載的檔案
-        $downloadPath = __DIR__ . "/../downloads/{$ticker}/10-K";
-        $existingFiles = [];
+        // 檢查資料庫中是否已有該公司的記錄
+        $db = new Database();
+        $pdo = $db->getConnection();
 
-        if (is_dir($downloadPath)) {
-            $files = glob($downloadPath . "/*.txt");
-            foreach ($files as $file) {
-                $filename = basename($file);
-                // 從檔案名提取年份 (例如: 0001326801-21-000014.txt -> 2021)
-                if (preg_match('/(\d{2})-\d{6}\.txt$/', $filename, $matches)) {
-                    $shortYear = intval($matches[1]);
-                    $fullYear = $shortYear >= 90 ? 1900 + $shortYear : 2000 + $shortYear;
-                    $existingFiles[$fullYear] = $filename;
-                } else if (preg_match('/(\d{4})/', $filename, $matches)) {
-                    // 備用邏輯：尋找四位數年份
-                    $year = $matches[1];
-                    $existingFiles[$year] = $filename;
-                }
-            }
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM ten_k_filings WHERE company_name = ?");
+        $stmt->execute([$ticker]);
+        $count = $stmt->fetchColumn();
+
+        if ($count > 0) {
+            echo json_encode([
+                'success' => true,
+                'message' => "資料庫中已有 {$ticker} 的 10-K 記錄，跳過下載",
+                'ticker' => $ticker,
+                'total_files' => $count,
+                'existing_files' => []
+            ]);
+            exit;
         }
 
         // 啟動 Python 下載腳本

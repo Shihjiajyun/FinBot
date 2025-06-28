@@ -157,41 +157,62 @@ function generateGPT4OAnswer($question, $summaryData, $ticker)
     $openaiApiKey = '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';
 
     try {
-        // 構建系統提示詞
-        $systemPrompt = "你是一位專業的財務分析師和投資顧問，專門分析美股上市公司的10-K年報。你的任務是：
-
-1. **深度分析**: 基於提供的10-K摘要數據，提供專業、深入的財務和業務分析
-2. **數據驅動**: 所有分析都必須基於具體的財務數據和事實
-3. **投資視角**: 從投資者角度提供有價值的洞察和建議
-4. **風險評估**: 客觀評估公司面臨的風險和機會
-5. **趨勢分析**: 分析多年份數據時，重點關注趨勢變化和發展軌跡
-
-回答要求：
-- 使用繁體中文回答
-- 結構清晰，使用標題和列表
-- 包含具體數據支持
-- 提供專業但易懂的解釋
-- 當有多年份數據時，進行對比分析
-- 只回答有明確數據支持的內容";
+        // 確保UTF-8編碼正確
+        $question = mb_convert_encoding($question, 'UTF-8', 'UTF-8');
 
         // 構建摘要內容
         $summaryContent = buildSummaryContent($summaryData, $ticker);
 
+        // 確保摘要內容的UTF-8編碼正確
+        $summaryContent = mb_convert_encoding($summaryContent, 'UTF-8', 'UTF-8');
+
+        // 構建系統提示詞
+        $systemPrompt = "你是一位專業的財務分析師與資深投資顧問，專門針對美國上市公司公開揭露的 10-K 年報資料進行深入分析與解釋。你的目的是協助用戶理解企業的財務結構、營運現況與未來風險，並提供清晰、具參考價值的投資觀點。
+
+你將根據以下規則回答：
+
+1. **精準回答問題**：針對用戶問題，提供明確結論與推論依據。
+2. **數據驅動**：分析內容須以提供的摘要財報為依據，避免虛構資訊。若無足夠資料，請說明無法回答。
+3. **投資視角與風險意識**：從投資人的立場出發，關注企業的獲利能力、現金流、負債結構、產業動能與競爭地位。
+4. **趨勢比對**：當摘要中包含多年份資料時，請比較趨勢、成長與惡化情況，強調變動背後的商業邏輯。
+5. **清楚結構化**：回覆需使用繁體中文，分段撰寫並使用標題與項目符號，語氣專業但易懂。
+
+**回覆格式：**
+---
+### 一、問題回覆（直接且明確）
+- ...
+
+### 二、財務數據支持
+- 2024 年營收為 $12 億，年增長 8%，來自...
+- 營業利益率下降 2%，主要因...
+
+### 三、業務與市場分析
+- 該公司主營業務為...
+- 其在北美市場市佔率為 xx%，面臨...
+
+### 四、投資意義與風險提示
+- 成長潛力來自...
+- 主要風險包括：需求放緩、利率上升...
+
+### 五、趨勢觀察（如有多年份資料）
+- 營收連續 3 年上升（2021：$10億 → 2023：$12億），毛利率穩定於 40%
+---
+
+如無明確數據支持某觀點，請清楚註記「無法從摘要資料判斷」。";
+
         // 構建用戶提示詞
-        $userPrompt = "基於以下 $ticker 公司的10-K財報摘要數據，請回答用戶問題：
+        $userPrompt = "基於以下 $ticker 公司的10-K財報摘要資料，請回答用戶問題：
 
 $summaryContent
 
 用戶問題：$question
 
-請提供專業、深入的分析，包含：
-1. 直接回答用戶問題
-2. 相關的財務數據支持
-3. 業務背景和市場環境分析
-4. 潛在的投資意義和風險提示
-5. 如有多年份數據，請進行趨勢對比
-
-回答格式請使用Markdown，包含適當的標題、列表和強調。";
+請依據專業財務分析視角，結構化提供：
+1. 問題回覆
+2. 相關財務數據支持
+3. 業務與市場背景
+4. 投資意義與潛在風險
+5. 多年份資料的趨勢變化（如有）";
 
         // 調用 OpenAI API
         $ch = curl_init();
@@ -216,12 +237,11 @@ $summaryContent
                 ]
             ],
             'max_tokens' => 3000,  // 增加token限制以獲得更詳細的回答
-            'temperature' => 0.1,   // 低溫度確保準確性
-            'presence_penalty' => 0.1,
-            'frequency_penalty' => 0.1
+            'temperature' => 0.1   // 低溫度確保準確性
         ];
 
-        $jsonData = json_encode($data, JSON_UNESCAPED_UNICODE);
+        // 確保JSON編碼正確
+        $jsonData = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_IGNORE);
         if ($jsonData === false) {
             error_log("JSON編碼失敗: " . json_last_error_msg());
             curl_close($ch);
@@ -231,6 +251,12 @@ $summaryContent
         curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
 
         $response = curl_exec($ch);
+        if ($response === false) {
+            error_log("CURL錯誤: " . curl_error($ch));
+            curl_close($ch);
+            return null;
+        }
+
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
@@ -240,13 +266,19 @@ $summaryContent
         }
 
         $result = json_decode($response, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log("JSON解碼失敗: " . json_last_error_msg());
+            return null;
+        }
 
         if (!$result || !isset($result['choices'][0]['message']['content'])) {
             error_log("OpenAI API 回應格式錯誤: " . $response);
             return null;
         }
 
-        return trim($result['choices'][0]['message']['content']);
+        $answer = trim($result['choices'][0]['message']['content']);
+        // 再次確保回答的UTF-8編碼正確
+        return mb_convert_encoding($answer, 'UTF-8', 'UTF-8');
     } catch (Exception $e) {
         error_log("生成GPT-4O答案錯誤: " . $e->getMessage());
         return null;

@@ -801,8 +801,6 @@ function get10KFileContent($ticker, $filename)
     }
 }
 
-
-
 /**
  * 生成10-K的GPT回答
  */
@@ -820,86 +818,26 @@ function generate10KGPTAnswer($question, $tenKContent, $ticker, $filename)
         $tenKContent = trim($tenKContent);
         $question = trim($question);
 
+        // 確保UTF-8編碼正確
+        $tenKContent = mb_convert_encoding($tenKContent, 'UTF-8', 'UTF-8');
+        $question = mb_convert_encoding($question, 'UTF-8', 'UTF-8');
+
         // 移除可能導致JSON問題的特殊字符
-        $tenKContent = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $tenKContent);
-        $question = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $question);
+        $tenKContent = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $tenKContent);
+        $question = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $question);
 
         // 限制內容長度以避免超過API限制
         $contentLimit = 12000; // 減少到12k字符以確保安全
-        if (strlen($tenKContent) > $contentLimit) {
-            $tenKContent = substr($tenKContent, 0, $contentLimit) . "\n\n[內容因長度限制而截斷]";
+        if (mb_strlen($tenKContent, 'UTF-8') > $contentLimit) {
+            $tenKContent = mb_substr($tenKContent, 0, $contentLimit, 'UTF-8') . "\n\n[內容因長度限制而截斷]";
         }
 
-        $fileInfo = $filename === 'ALL' ? "所有10-K檔案的GPT摘要" : "10-K檔案的GPT摘要：$filename";
+        $fileDescription = $filename === 'ALL' ? "所有10-K檔案的GPT摘要" : "10-K檔案的GPT摘要：$filename";
 
-        $systemPrompt = "你是一個專業的財務分析師，專門分析SEC 10-K檔案摘要。你必須嚴格基於提供的摘要內容回答問題，並明確引用相關的Item章節。
+        $systemPrompt = "你是一個專業的財務分析師，專門分析SEC 10-K檔案摘要。你必須嚴格基於提供的摘要內容回答問題，並明確引用相關的Item章節。";
 
-重要回答規則：
-1. 當用戶明確要求「圖表」、「視覺化」、「chart」時，使用 ```chart 標記提供JSON格式的圖表數據
-2. 圖表格式：```chart + 完整的Chart.js配置JSON + ```
-3. 對於風險因素、業務描述、策略分析等一般問題，使用標準Markdown文字格式
-4. 使用清晰的段落、標題（##）、列表（-）和粗體（**）來組織內容
+        $userPrompt = "請分析以下 {$ticker} 公司的 {$fileDescription}，並回答問題：\n\n{$question}\n\n摘要內容：\n\n{$tenKContent}";
 
-圖表數據格式範例：
-```chart
-{
-  \"type\": \"line\",
-  \"data\": {
-    \"labels\": [\"2022\", \"2023\", \"2024\"],
-    \"datasets\": [{
-      \"label\": \"總收入 (百萬美元)\",
-      \"data\": [394328, 383285, 391035],
-      \"borderColor\": \"#2c5aa0\",
-      \"backgroundColor\": \"rgba(44, 90, 160, 0.1)\"
-    }]
-  },
-  \"options\": {
-    \"responsive\": true,
-    \"plugins\": {
-      \"title\": {
-        \"display\": true,
-        \"text\": \"Apple 財務表現\"
-      }
-    }
-  }
-}
-```";
-
-        $userPrompt = "基於以下 $ticker 的 $fileInfo 內容，請回答用戶的問題。
-
-重要說明：
-以下內容是經過GPT處理的10-K報告摘要，包含了各個Item的詳細分析：
-- Item 1A: Risk Factors（風險因素）
-- Item 7: MD&A（管理層討論與分析）
-- Item 8: Financial Statements（財務報表）
-- 以及其他重要章節的摘要
-
-回答準則：
-1. 基於摘要內容回答 - 這些是已經經過分析的10-K報告摘要
-2. 明確引用來源 - 引用具體的Item章節，例如「根據Item 1A風險因素分析」
-3. 結構化回答 - 使用清晰的Markdown格式
-4. 專業分析 - 提供深入的財務和業務分析
-
-回答格式要求：
-- 使用繁體中文
-- 使用標準Markdown格式：## 標題、**粗體**、- 列表項目
-- 對重要的風險因素、業務重點使用**粗體**標記
-- 按照相關的Item章節組織回答
-- 使用清晰的段落分隔
-
-圖表使用指南：
-- 當用戶要求「圖表」、「視覺化」時，提供 ```chart JSON數據 ```
-- 支援的圖表類型：line（折線圖）、bar（長條圖）、pie（圓餅圖）
-- 圖表數據必須基於10-K報告中的實際數值
-- 對於一般問題，使用標準Markdown文字格式
-- 確保所有數據都有明確的來源引用
-
-10-K報告摘要內容：
-$tenKContent
-
-用戶問題：$question
-
-請基於以上摘要內容提供專業、準確的回答。記住：只有數值數據才使用圖表，其他內容使用標準Markdown格式：";
 
         // 調用 OpenAI API
         $ch = curl_init();
@@ -928,7 +866,7 @@ $tenKContent
         ];
 
         // 確保JSON編碼正確
-        $jsonData = json_encode($data, JSON_UNESCAPED_UNICODE);
+        $jsonData = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_IGNORE);
         if ($jsonData === false) {
             error_log("JSON編碼失敗: " . json_last_error_msg());
             curl_close($ch);
@@ -938,6 +876,12 @@ $tenKContent
         curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
 
         $response = curl_exec($ch);
+        if ($response === false) {
+            error_log("CURL錯誤: " . curl_error($ch));
+            curl_close($ch);
+            return null;
+        }
+
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
@@ -947,13 +891,19 @@ $tenKContent
         }
 
         $result = json_decode($response, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log("JSON解碼失敗: " . json_last_error_msg());
+            return null;
+        }
 
         if (!$result || !isset($result['choices'][0]['message']['content'])) {
             error_log("OpenAI API 回應格式錯誤: " . $response);
             return null;
         }
 
-        return trim($result['choices'][0]['message']['content']);
+        $answer = trim($result['choices'][0]['message']['content']);
+        // 再次確保回答的UTF-8編碼正確
+        return mb_convert_encoding($answer, 'UTF-8', 'UTF-8');
     } catch (Exception $e) {
         error_log("生成10-K GPT答案錯誤: " . $e->getMessage());
         return null;

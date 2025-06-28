@@ -58,7 +58,7 @@ function getPythonCommand()
     } else {
         // Linux/Unix 路徑
         $python_paths = [
-            '/opt/bitnami/apache/htdocs/FinBot/finbot_env/bin/python3', // 虛擬環境 Python
+            '/opt/bitnami/apache/htdocs/FinBot/finbot_env/bin/python3', // 虛擬環境 Python (優先使用)
             '/usr/bin/python3',
             '/usr/bin/python',
             '/usr/local/bin/python3',
@@ -67,6 +67,11 @@ function getPythonCommand()
             'python3',
             'python'
         ];
+    }
+
+    // 先檢查虛擬環境的 Python
+    if ($os !== 'WIN' && isPythonValid('/opt/bitnami/apache/htdocs/FinBot/finbot_env/bin/python3')) {
+        return '/opt/bitnami/apache/htdocs/FinBot/finbot_env/bin/python3';
     }
 
     foreach ($python_paths as $path) {

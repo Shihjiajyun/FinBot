@@ -14,11 +14,55 @@ if sys.platform.startswith('win'):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
+# 忽略 BeautifulSoup 的 XML 警告
+from bs4 import XMLParsedAsHTMLWarning
+import warnings
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+
 from secedgar import filings, FilingType
 from datetime import datetime, timedelta
 from pathlib import Path
 import time
 import argparse
+import mysql.connector
+from mysql.connector import Error
+
+def check_ticker_in_database(ticker):
+    """
+    檢查資料庫中是否已有該股票的10-K記錄
+    
+    Args:
+        ticker: 股票代號 (如 'AAPL', 'MSFT')
+    
+    Returns:
+        bool: True表示已有記錄，False表示沒有記錄
+    """
+    # 資料庫配置
+    db_config = {
+        'host': '43.207.210.147',
+        'database': 'finbot_db',
+        'user': 'myuser',
+        'password': '123456789',
+        'charset': 'utf8mb4'
+    }
+    
+    try:
+        # 連接資料庫
+        connection = mysql.connector.connect(**db_config)
+        cursor = connection.cursor()
+        
+        # 查詢是否已有該公司的記錄
+        cursor.execute("SELECT COUNT(*) FROM ten_k_filings WHERE company_name = %s", (ticker,))
+        count = cursor.fetchone()[0]
+        
+        cursor.close()
+        connection.close()
+        
+        return count > 0
+        
+    except Error as e:
+        print(f"❌ 檢查資料庫時發生錯誤: {e}")
+        return False
 
 def download_stock_filings(ticker):
     """
@@ -42,18 +86,12 @@ def download_stock_filings(ticker):
     print(f"時間範圍: {start_date.strftime('%Y-%m-%d')} 到 {end_date.strftime('%Y-%m-%d')}")
     
     try:
-        # 先檢查是否已有檔案
-        target_dir = base_dir / ticker / "10-K"
-        if target_dir.exists():
-            existing_files = list(target_dir.glob("*.txt"))
-            if len(existing_files) > 0:
-                print(f"發現已有 {len(existing_files)} 個 10-K 檔案，跳過下載")
-                for file_path in existing_files:
-                    print(f"   - {file_path.name}")
-                print(f"使用現有的 {len(existing_files)} 個 10-K 檔案")
-                return True
+        # 檢查資料庫中是否已有該公司的記錄
+        if check_ticker_in_database(ticker):
+            print(f"資料庫中已有 {ticker} 的 10-K 記錄，跳過下載")
+            return True
         
-        print(f"正在下載 10-K 財報...")
+        print(f"資料庫中尚無 {ticker} 的記錄，開始下載...")
         
         # 創建 filings 物件
         filing = filings(
