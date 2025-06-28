@@ -4,6 +4,7 @@
 批量處理所有股票的 10-K Filing Items Parser
 遍歷 downloads 資料夾中的所有公司財報，拆解 ITEM 並存入資料表
 檢查是否已被拆解過，避免重複處理
+特別處理新下載的股票，確保所有股票都被拆解
 """
 
 import os
@@ -637,6 +638,36 @@ class BatchTenKParser:
         # 降低關鍵字要求，只需要1個相關關鍵字即可
         return keyword_count >= 1
 
+    def get_unprocessed_tickers(self):
+        """獲取尚未拆解的股票清單"""
+        downloads_path = Path(__file__).parent / "downloads"
+        
+        if not downloads_path.exists():
+            return []
+        
+        # 獲取所有有10-K檔案的股票目錄
+        ticker_dirs = []
+        for item in downloads_path.iterdir():
+            if item.is_dir():
+                ten_k_path = item / "10-K"
+                if ten_k_path.exists():
+                    txt_files = list(ten_k_path.glob("*.txt"))
+                    if txt_files:  # 如果有txt檔案
+                        ticker_dirs.append(item)
+        
+        # 連接資料庫檢查哪些還沒被拆解
+        if not self.connect_database():
+            return []
+        
+        unprocessed_tickers = []
+        for ticker_dir in ticker_dirs:
+            ticker = ticker_dir.name.upper()
+            if not self.check_ticker_already_parsed(ticker):
+                unprocessed_tickers.append((ticker, ticker_dir))
+        
+        self.disconnect_database()
+        return unprocessed_tickers
+
     def process_all_tickers(self):
         """處理所有股票的財報"""
         downloads_path = Path(__file__).parent / "downloads"
@@ -645,36 +676,29 @@ class BatchTenKParser:
             print(f"❌ 找不到 downloads 資料夾: {downloads_path}")
             return False
         
-        # 獲取所有股票目錄
-        ticker_dirs = [d for d in downloads_path.iterdir() if d.is_dir()]
+        # 獲取尚未拆解的股票清單
+        unprocessed_tickers = self.get_unprocessed_tickers()
         
-        if not ticker_dirs:
-            print("❌ downloads 資料夾中沒有找到股票目錄")
-            return False
+        if not unprocessed_tickers:
+            print("🎉 所有股票的10-K財報都已經拆解完成!")
+            return True
         
-        print(f"🎯 找到 {len(ticker_dirs)} 個股票目錄")
+        print(f"🎯 找到 {len(unprocessed_tickers)} 個需要拆解的股票")
         
         # 連接資料庫
         if not self.connect_database():
             return False
         
         processed_count = 0
-        skipped_count = 0
+        failed_count = 0
         total_files_processed = 0
         
         try:
-            for ticker_dir in ticker_dirs:
-                ticker = ticker_dir.name.upper()
+            for i, (ticker, ticker_dir) in enumerate(unprocessed_tickers, 1):
                 print(f"\n{'='*60}")
-                print(f"🔄 檢查股票: {ticker}")
+                print(f"🔄 處理股票 {i}/{len(unprocessed_tickers)}: {ticker}")
+                print(f"{'='*60}")
                 
-                # 檢查是否已經被拆解過
-                if self.check_ticker_already_parsed(ticker):
-                    print(f"⏭️ {ticker} 已經被拆解過，跳過")
-                    skipped_count += 1
-                    continue
-                
-                print(f"🆕 開始處理 {ticker}")
                 ticker_start_time = time.time()
                 
                 files_processed = self.process_ticker_folder(ticker)
@@ -683,44 +707,84 @@ class BatchTenKParser:
                 if files_processed > 0:
                     processed_count += 1
                     ticker_duration = time.time() - ticker_start_time
-                    print(f"✅ {ticker} 處理完成，耗時: {ticker_duration:.2f}秒")
+                    print(f"✅ {ticker} 處理完成，拆解了 {files_processed} 個檔案，耗時: {ticker_duration:.2f}秒")
                 else:
+                    failed_count += 1
                     print(f"❌ {ticker} 處理失敗")
+                
+                # 每5個股票輸出一次進度
+                if i % 5 == 0 or i == len(unprocessed_tickers):
+                    elapsed = time.time() - self.start_time
+                    progress = (i / len(unprocessed_tickers)) * 100
+                    print(f"\n📊 進度報告: {i}/{len(unprocessed_tickers)} ({progress:.1f}%)")
+                    print(f"   ✅ 成功: {processed_count} | ❌ 失敗: {failed_count}")
+                    print(f"   ⏱️ 已耗時: {elapsed/60:.1f} 分鐘")
         
         finally:
             self.disconnect_database()
         
-        print(f"\n{'='*60}")
-        print(f"🎉 批量處理完成!")
-        print(f"📊 處理統計:")
-        print(f"   新處理股票: {processed_count}")
-        print(f"   跳過股票: {skipped_count}")
-        print(f"   總檔案數: {total_files_processed}")
+        print(f"\n{'='*80}")
+        print(f"🎉 批量10-K拆解完成!")
+        print(f"{'='*80}")
+        print(f"📊 拆解統計:")
+        print(f"   ✅ 成功拆解股票: {processed_count} 家")
+        print(f"   ❌ 拆解失敗股票: {failed_count} 家")
+        print(f"   📄 總拆解檔案數: {total_files_processed} 個")
         
         total_time = time.time() - self.start_time
-        print(f"⏱️ 總耗時: {total_time:.2f}秒")
+        print(f"⏱️ 總耗時: {total_time/60:.1f} 分鐘")
+        print(f"⚡ 平均每股票: {total_time/len(unprocessed_tickers):.1f} 秒")
+        
+        if processed_count > 0:
+            print(f"\n🎯 建議: 新拆解的股票可用於FinBot系統查詢!")
         
         return processed_count > 0
 
 def main():
     """主函數"""
-    print("🚀 開始批量處理所有股票的10-K財報...")
+    print("🚀 開始批量拆解10-K財報ITEM內容...")
     print("📝 本程式會:")
     print("   1. 掃描 downloads 資料夾中的所有股票")
     print("   2. 檢查每個股票是否已被拆解過")
-    print("   3. 對未拆解的股票進行 ITEM 拆解")
+    print("   3. 對新下載或未拆解的股票進行 ITEM 拆解")
     print("   4. 將結果存入 ten_k_filings 資料表")
-    print("="*60)
+    print("   5. 自動處理新下載的股票財報")
+    print("="*70)
     
     parser = BatchTenKParser()
+    
+    # 首先檢查有多少股票需要拆解
+    unprocessed = parser.get_unprocessed_tickers()
+    
+    if not unprocessed:
+        print("🎉 所有已下載的股票都已完成ITEM拆解!")
+        print("💡 如需拆解更多股票，請先運行 ALL.py 下載更多10-K財報")
+        sys.exit(0)
+    
+    print(f"📊 發現 {len(unprocessed)} 個股票需要拆解:")
+    for i, (ticker, _) in enumerate(unprocessed[:10], 1):
+        print(f"   {i:2d}. {ticker}")
+    if len(unprocessed) > 10:
+        print(f"   ... 還有 {len(unprocessed) - 10} 個股票")
+    
+    # 確認是否繼續
+    try:
+        response = input(f"\n❓ 確認要拆解這 {len(unprocessed)} 個股票的10-K財報嗎? (y/N): ")
+        if response.lower() != 'y':
+            print("❌ 已取消拆解")
+            sys.exit(0)
+    except KeyboardInterrupt:
+        print(f"\n❌ 已取消拆解")
+        sys.exit(0)
     
     success = parser.process_all_tickers()
     
     if success:
-        print("\n✅ 批量處理成功完成!")
+        print("\n✅ 批量拆解成功完成!")
+        print("🎯 所有新拆解的股票現在可以在FinBot系統中查詢!")
         sys.exit(0)
     else:
-        print("\n❌ 批量處理失敗!")
+        print("\n❌ 批量拆解過程中出現錯誤!")
         sys.exit(1)
 
 if __name__ == "__main__":
