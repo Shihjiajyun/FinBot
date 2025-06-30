@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ALL.py - 批量下載股票的近五年10-K財報
-==========================================
+ALL.py - 批量下載股票的近五年10-K財報並自動拆分存入資料表
+===============================================================
 自動執行以下步驟（排除AAPL和已下載的股票）：
 1. 檢查downloads資料夾中已下載的股票
 2. 下載尚未下載的股票近五年10-K財報 (download_single_stock.py) 
+3. 自動拆分ITEM並存入ten_k_filings資料表 (parse_single_stock.py)
 """
 
 import sys
@@ -146,10 +147,11 @@ class BatchStockProcessor:
         # 過濾出尚未下載的股票
         self.stocks_to_download = [stock for stock in self.stock_list if stock not in self.already_downloaded]
         
-        print(f"🚀 批量10-K下載器初始化完成")
+        print(f"🚀 批量10-K下載+拆分器初始化完成")
         print(f"📊 股票清單總數: {len(self.stock_list)} 家公司")
         print(f"✅ 已下載股票: {len(self.already_downloaded)} 家公司")
         print(f"⬇️ 需要下載: {len(self.stocks_to_download)} 家公司")
+        print(f"🗄️ 會自動拆分ITEM存入ten_k_filings資料表")
         print(f"📝 日誌文件: batch_processor.log")
         
     def get_already_downloaded_stocks(self):
@@ -236,19 +238,29 @@ class BatchStockProcessor:
             return False, str(e)
 
     def process_single_stock(self, ticker, step_number, total_stocks):
-        """處理單一股票的10-K財報下載"""
+        """處理單一股票的10-K財報下載並自動拆分存入資料表"""
         self.log_progress(step_number, total_stocks, ticker, "開始下載10-K財報")
         
-        # 只執行步驟：下載近五年10-K財報
+        # 步驟1：下載近五年10-K財報
         self.log_progress(step_number, total_stocks, ticker, "下載近五年10-K財報")
         success, output = self.run_python_script('download_single_stock.py', ticker, timeout=600)
         
-        if success:
-            self.logger.info(f"✅ {ticker} - 近五年10-K財報下載完成")
-            return True
-        else:
+        if not success:
             self.logger.error(f"❌ {ticker} - 10-K財報下載失敗: {output}")
             return False
+        
+        self.logger.info(f"✅ {ticker} - 近五年10-K財報下載完成")
+        
+        # 步驟2：自動拆分ITEM並存入資料表
+        self.log_progress(step_number, total_stocks, ticker, "拆分ITEM存入資料表")
+        parse_success, parse_output = self.run_python_script('parse_single_stock.py', ticker, timeout=300)
+        
+        if not parse_success:
+            self.logger.error(f"❌ {ticker} - ITEM拆分失敗: {parse_output}")
+            return False
+        
+        self.logger.info(f"✅ {ticker} - ITEM拆分完成，已存入ten_k_filings資料表")
+        return True
     
     def run_batch_processing(self, start_index=0, end_index=None):
         """執行批量處理"""
@@ -262,9 +274,10 @@ class BatchStockProcessor:
             self.logger.info("🎉 所有股票都已下載完成，無需重複下載!")
             return
         
-        self.logger.info(f"🚀 開始批量下載10-K財報")
+        self.logger.info(f"🚀 開始批量下載+拆分10-K財報")
         self.logger.info(f"📊 處理範圍: {start_index+1} 到 {end_index} (共 {total_stocks} 家公司)")
         self.logger.info(f"📝 股票列表: {', '.join(processing_list[:10])}{'...' if len(processing_list) > 10 else ''}")
+        self.logger.info(f"🗄️ 每家公司下載完成後會自動拆分ITEM存入資料表")
         
         successful_stocks = []
         failed_stocks = []
@@ -279,10 +292,10 @@ class BatchStockProcessor:
                 
                 if is_success:
                     successful_stocks.append(ticker)
-                    self.logger.info(f"🎉 {ticker} 下載成功!")
+                    self.logger.info(f"🎉 {ticker} 下載+拆分成功!")
                 else:
                     failed_stocks.append(ticker)
-                    self.logger.error(f"💥 {ticker} 下載失敗!")
+                    self.logger.error(f"💥 {ticker} 處理失敗!")
                 
                 # 每10家公司輸出一次統計
                 if i % 10 == 0 or i == total_stocks:
@@ -306,8 +319,8 @@ class BatchStockProcessor:
         """輸出中期統計資訊"""
         elapsed = time.time() - self.start_time
         self.logger.info(f"\n📊 中期統計 ({current}/{total}):")
-        self.logger.info(f"   ✅ 下載成功: {len(successful)} 家")
-        self.logger.info(f"   ❌ 下載失敗: {len(failed)} 家")
+        self.logger.info(f"   ✅ 下載+拆分成功: {len(successful)} 家")
+        self.logger.info(f"   ❌ 處理失敗: {len(failed)} 家")
         self.logger.info(f"   ⏱️ 已耗時: {elapsed/60:.1f} 分鐘")
         
     def print_final_stats(self, processing_list, successful, failed):
@@ -316,21 +329,22 @@ class BatchStockProcessor:
         total_stocks = len(processing_list)
         
         self.logger.info(f"\n{'='*80}")
-        self.logger.info(f"🏁 批量10-K下載完成報告")
+        self.logger.info(f"🏁 批量10-K下載+拆分完成報告")
         self.logger.info(f"{'='*80}")
         self.logger.info(f"📊 總計處理: {total_stocks} 家公司")
-        self.logger.info(f"✅ 下載成功: {len(successful)} 家 ({len(successful)/total_stocks*100:.1f}%)")
-        self.logger.info(f"❌ 下載失敗: {len(failed)} 家 ({len(failed)/total_stocks*100:.1f}%)")
+        self.logger.info(f"✅ 下載+拆分成功: {len(successful)} 家 ({len(successful)/total_stocks*100:.1f}%)")
+        self.logger.info(f"❌ 處理失敗: {len(failed)} 家 ({len(failed)/total_stocks*100:.1f}%)")
+        self.logger.info(f"🗄️ 成功的公司已存入ten_k_filings資料表")
         self.logger.info(f"⏱️ 總耗時: {total_time/60:.1f} 分鐘")
         self.logger.info(f"⚡ 平均每家: {total_time/total_stocks:.1f} 秒")
         
         if successful:
-            self.logger.info(f"\n✅ 下載成功的公司:")
+            self.logger.info(f"\n✅ 下載+拆分成功的公司:")
             for ticker in successful:
                 self.logger.info(f"   - {ticker}")
         
         if failed:
-            self.logger.info(f"\n❌ 下載失敗的公司:")
+            self.logger.info(f"\n❌ 處理失敗的公司:")
             for ticker in failed:
                 self.logger.info(f"   - {ticker}")
     
@@ -356,7 +370,7 @@ class BatchStockProcessor:
             print("      (無 - 所有股票都已下載)")
         
         print("=" * 80)
-        print(f"注意: 已排除 AAPL，將下載近五年10-K財報")
+        print(f"注意: 已排除 AAPL，將下載近五年10-K財報並自動拆分存入資料表")
 
 def main():
     """主函數"""
@@ -368,14 +382,14 @@ def main():
             return
         elif sys.argv[1] == '--help':
             print("""
-ALL.py - 批量10-K財報下載器使用說明
-===================================
+ALL.py - 批量10-K財報下載+拆分器使用說明
+=========================================
 
 用法:
-  python ALL.py                    # 下載所有尚未下載的股票10-K財報
+  python ALL.py                    # 下載並拆分所有尚未下載的股票10-K財報
   python ALL.py --list             # 顯示已下載和需下載的股票列表  
-  python ALL.py --range 0 20       # 下載前20家需下載公司的10-K財報
-  python ALL.py --range 20 40      # 下載第21-40家需下載公司的10-K財報
+  python ALL.py --range 0 20       # 下載並拆分前20家需下載公司的10-K財報
+  python ALL.py --range 20 40      # 下載並拆分第21-40家需下載公司的10-K財報
   python ALL.py --help             # 顯示此說明
 
 功能特色:
@@ -383,6 +397,7 @@ ALL.py - 批量10-K財報下載器使用說明
   - 已自動排除 AAPL
   - 大幅擴展股票清單 (S&P 500 + Russell 1000 + 成長股等)
   - 每家公司間隔3秒，避免API限制
+  - 自動拆分ITEM並存入ten_k_filings資料表
   - 日誌保存在 batch_processor.log
   - 可隨時按 Ctrl+C 中斷處理
   - 只下載近五年的10-K財報
@@ -391,6 +406,7 @@ ALL.py - 批量10-K財報下載器使用說明
   1. 掃描downloads資料夾檢查已下載股票
   2. 過濾出需要下載的股票列表
   3. 下載近五年10-K財報 (download_single_stock.py)
+  4. 自動拆分ITEM存入ten_k_filings資料表 (parse_single_stock.py)
             """)
             return
         elif sys.argv[1] == '--range' and len(sys.argv) >= 4:
@@ -408,12 +424,12 @@ ALL.py - 批量10-K財報下載器使用說明
     
     # 確認是否繼續
     try:
-        response = input(f"\n❓ 確認要下載這 {len(processor.stocks_to_download)} 家公司的近五年10-K財報嗎? (y/N): ")
+        response = input(f"\n❓ 確認要下載並拆分這 {len(processor.stocks_to_download)} 家公司的近五年10-K財報嗎? (y/N): ")
         if response.lower() != 'y':
-            print("❌ 已取消下載")
+            print("❌ 已取消處理")
             return
     except KeyboardInterrupt:
-        print(f"\n❌ 已取消下載")
+        print(f"\n❌ 已取消處理")
         return
     
     # 開始批量處理
