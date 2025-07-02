@@ -8,11 +8,16 @@
 
 import os
 import sys
+from pathlib import Path
+
+# 添加專案根目錄到 Python 路徑
+ROOT_DIR = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(str(ROOT_DIR))
+
 import time
 import mysql.connector
 from mysql.connector import Error
 from datetime import datetime
-from pathlib import Path
 import logging
 from parse_single_stock import SingleStockTenKParser
 
@@ -30,8 +35,8 @@ class SmartTenKProcessor:
             'charset': 'utf8mb4'
         }
         
-        # 設置下載目錄
-        self.downloads_dir = Path("./downloads")
+        # 設置下載目錄（使用絕對路徑）
+        self.downloads_dir = ROOT_DIR / "downloads"
         if not self.downloads_dir.exists():
             print(f"❌ 找不到下載目錄: {self.downloads_dir}")
             sys.exit(1)
@@ -40,12 +45,16 @@ class SmartTenKProcessor:
     
     def setup_logging(self):
         """設置日誌"""
-        log_filename = f"smart_tenk_processor_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        # 在專案根目錄下創建logs目錄
+        log_dir = ROOT_DIR / "logs"
+        log_dir.mkdir(exist_ok=True)
+        
+        log_filename = log_dir / f"smart_tenk_processor_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s',
             handlers=[
-                logging.FileHandler(log_filename, encoding='utf-8'),
+                logging.FileHandler(str(log_filename), encoding='utf-8'),
                 logging.StreamHandler()
             ]
         )
