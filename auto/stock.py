@@ -35,11 +35,12 @@ class SmartTenKProcessor:
             'charset': 'utf8mb4'
         }
         
-        # 設置下載目錄（使用絕對路徑）
-        self.downloads_dir = ROOT_DIR / "downloads"
-        if not self.downloads_dir.exists():
-            print(f"❌ 找不到下載目錄: {self.downloads_dir}")
-            sys.exit(1)
+        # 設置下載目錄（使用 stock.py 所在資料夾裡的 downloads）
+        current_dir = Path(__file__).resolve().parent
+        self.downloads_dir = current_dir / "downloads"
+        self.downloads_dir.mkdir(parents=True, exist_ok=True)  # 如果不存在就建立
+
+        print(f"✅ 使用下載目錄: {self.downloads_dir}")
         
         self.start_time = time.time()
     
