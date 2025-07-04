@@ -6,6 +6,7 @@
 """
 
 import sys
+import os
 import mysql.connector
 import openai
 import time
@@ -24,8 +25,13 @@ class AutoGPTSummarizer:
             db_config: 資料庫連接配置
         """
         
+        # 從環境變量讀取 OpenAI API 金鑰
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            raise ValueError("請設置 OPENAI_API_KEY 環境變量")
+            
         self.openai_client = openai.OpenAI(
-            api_key='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'
+            api_key=api_key
         )
         
         self.db_config = db_config or {
