@@ -27,7 +27,6 @@ class SingleStockGPTSummarizer:
         """
         self.ticker = ticker.upper()
         self.filing_ids = filing_ids
-        
         self.openai_client = openai.OpenAI(
             api_key='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'
         )
