@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-單一股票 GPT 摘要器
-基於 gpt_summarizer.py，專門處理指定股票的選定財報摘要
+自動 GPT 摘要器
+自動從 ten_k_filings 表中抓取所有未摘要的財報，逐一進行 GPT 摘要並存入摘要資料表
 """
 
 import sys
@@ -13,20 +13,16 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-class SingleStockGPTSummarizer:
-    """單一股票 GPT 摘要處理器"""
+class AutoGPTSummarizer:
+    """自動 GPT 摘要處理器"""
     
-    def __init__(self, ticker: str, filing_ids: List[int], db_config: Dict = None):
+    def __init__(self, db_config: Dict = None):
         """
         初始化摘要處理器
         
         Args:
-            ticker: 股票代號
-            filing_ids: 要摘要的財報ID列表
             db_config: 資料庫連接配置
         """
-        self.ticker = ticker.upper()
-        self.filing_ids = filing_ids
         
         self.openai_client = openai.OpenAI(
             api_key='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'
@@ -682,19 +678,19 @@ class SingleStockGPTSummarizer:
             self.logger.error(f"資料庫連接失敗: {err}")
             raise
             
-    def get_filings_to_process(self) -> List[Dict]:
-        """獲取要處理的 10-K 檔案"""
+    def get_unprocessed_filings(self) -> List[Dict]:
+        """獲取所有未處理的 10-K 檔案"""
         connection = self.get_db_connection()
         cursor = connection.cursor(dictionary=True)
         
         try:
-            placeholders = ','.join(['%s'] * len(self.filing_ids))
-            query = f"""
+            query = """
             SELECT f.* FROM ten_k_filings f
-            WHERE f.id IN ({placeholders}) AND f.company_name = %s
-            ORDER BY f.report_date DESC
+            LEFT JOIN ten_k_filings_summary s ON f.id = s.original_filing_id
+            WHERE s.original_filing_id IS NULL
+            ORDER BY f.created_at DESC
             """
-            cursor.execute(query, self.filing_ids + [self.ticker])
+            cursor.execute(query)
             return cursor.fetchall()
             
         finally:
@@ -805,14 +801,14 @@ class SingleStockGPTSummarizer:
         try:
             insert_query = """
             INSERT INTO ten_k_filings_summary (
-                original_filing_id, file_name, company_name, report_date, processing_status
-            ) VALUES (%s, %s, %s, %s, 'processing')
+                original_filing_id, file_name, company_name, report_date, processing_status, summary_model
+            ) VALUES (%s, %s, %s, %s, 'processing', 'gpt-3.5-turbo-16k')
             """
             
             cursor.execute(insert_query, (
                 filing_data['id'],
                 filing_data['file_name'],
-                filing_data['company_name'],  # 現在是股票代號
+                filing_data['company_name'],
                 filing_data['report_date']
             ))
             
@@ -874,7 +870,7 @@ class SingleStockGPTSummarizer:
         start_time = time.time()
         
         self.logger.info(f"開始處理: {filing_data['file_name']}")
-        self.logger.info(f"   股票代號: {filing_data['company_name']}")
+        self.logger.info(f"   公司名稱: {filing_data['company_name']}")
         self.logger.info(f"   報告日期: {filing_data['report_date']}")
         
         # 檢查是否已有摘要
@@ -935,55 +931,44 @@ class SingleStockGPTSummarizer:
         return success_count > 0
         
     def run_processing(self):
-        """運行摘要處理"""
-        self.logger.info(f"開始處理 {self.ticker} 的指定財報摘要")
-        self.logger.info(f"財報ID: {self.filing_ids}")
+        """運行自動摘要處理"""
+        self.logger.info("🚀 開始自動 GPT 摘要處理")
         
-        # 獲取要處理的檔案
-        filings = self.get_filings_to_process()
+        # 獲取所有未處理的檔案
+        filings = self.get_unprocessed_filings()
         
         if not filings:
-            self.logger.error("沒有找到要處理的財報")
-            return False
+            self.logger.info("✅ 沒有找到需要處理的財報，所有財報都已經摘要完成")
+            return True
             
-        self.logger.info(f"找到 {len(filings)} 個待處理檔案")
+        self.logger.info(f"📊 找到 {len(filings)} 個待處理檔案")
         
         success_count = 0
         
         for i, filing in enumerate(filings, 1):
             try:
-                self.logger.info(f"\n--- 處理進度: {i}/{len(filings)} ---")
+                self.logger.info(f"\n{'='*60}")
+                self.logger.info(f"📝 處理進度: {i}/{len(filings)}")
+                self.logger.info(f"{'='*60}")
                 
                 if self.process_filing(filing):
                     success_count += 1
                     
             except Exception as e:
-                self.logger.error(f"失敗 處理檔案失敗: {filing['file_name']}, 錯誤: {e}")
+                self.logger.error(f"❌ 處理檔案失敗: {filing['file_name']}, 錯誤: {e}")
                 continue
                 
-        self.logger.info(f"\n摘要處理完成!")
-        self.logger.info(f"成功: {success_count}/{len(filings)}")
+        self.logger.info(f"\n{'='*60}")
+        self.logger.info(f"🎉 自動摘要處理完成!")
+        self.logger.info(f"📈 成功處理: {success_count}/{len(filings)} 個財報")
+        self.logger.info(f"{'='*60}")
         
         return success_count > 0
 
 
 def main():
     """主函數"""
-    if len(sys.argv) != 3:
-        print("用法: python summarize_single_stock.py <股票代號> <財報ID,以逗號分隔>")
-        print("範例: python summarize_single_stock.py AAPL 1,2,3")
-        sys.exit(1)
-    
-    ticker = sys.argv[1].upper()
-    filing_ids_str = sys.argv[2]
-    
-    try:
-        filing_ids = [int(id.strip()) for id in filing_ids_str.split(',')]
-    except ValueError:
-        print("錯誤: 財報ID必須是數字，以逗號分隔")
-        sys.exit(1)
-    
-    print(f"🚀 開始摘要 {ticker} 的財報: {filing_ids}")
+    print("🤖 自動 GPT 摘要器啟動中...")
     
     # 資料庫配置
     db_config = {
@@ -994,17 +979,17 @@ def main():
         'charset': 'utf8mb4'
     }
     
-    # 創建摘要處理器
-    summarizer = SingleStockGPTSummarizer(ticker, filing_ids, db_config)
+    # 創建自動摘要處理器
+    summarizer = AutoGPTSummarizer(db_config)
     
-    # 運行處理
+    # 運行自動處理
     success = summarizer.run_processing()
     
     if success:
-        print(f"🎉 {ticker} 摘要完成!")
+        print("🎉 自動摘要處理完成!")
         sys.exit(0)
     else:
-        print(f"❌ {ticker} 摘要失敗!")
+        print("❌ 自動摘要處理失敗!")
         sys.exit(1)
 
 
