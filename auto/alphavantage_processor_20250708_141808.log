@@ -1,0 +1,5 @@
+2025-07-08 14:18:08,021 - INFO - Alpha Vantage 處理器啟動
+2025-07-08 14:18:08,022 - INFO - Alpha Vantage 處理器初始化完成
+2025-07-08 14:18:08,025 - INFO - 開始處理股票: AMZN
+2025-07-08 14:18:09,613 - INFO - AMZN 公司名稱: Amazon.com Inc
+2025-07-08 14:19:38,133 - ERROR - 存入資料庫失敗: 2003 (HY000): Can't connect to MySQL server on '43.207.210.147:3306' (10060)

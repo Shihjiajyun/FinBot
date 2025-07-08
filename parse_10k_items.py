@@ -17,7 +17,7 @@ class TenKParser:
     def __init__(self, db_config=None):
         # 資料庫配置
         self.db_config = db_config or {
-            'host': '43.207.210.147',
+            'host': '13.114.174.139',
             'database': 'finbot_db',
             'user': 'myuser',
             'password': '123456789',

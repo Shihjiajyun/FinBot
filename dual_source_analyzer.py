@@ -35,7 +35,7 @@ class DualSourceAnalyzer:
         
         # 資料庫配置 (基於 config.php)
         self.db_config = db_config or {
-            'host': '43.207.210.147',
+            'host': '13.114.174.139',
             'database': 'finbot_db',
             'user': 'myuser',
             'password': '123456789',
@@ -2435,7 +2435,7 @@ def main():
     print()
     
     # use default database configuration (based on config.php)
-    print("Database: 43.207.210.147/finbot_db")
+    print("Database: 13.114.174.139/finbot_db")
     
     analyzer = DualSourceAnalyzer()  # use default configuration, no extra parameters
     

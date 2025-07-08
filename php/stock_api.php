@@ -149,24 +149,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     !empty($financial_data['absolute_metrics']) ||
                     !empty($financial_data['balance_sheet_data']));
 
-            // 如果沒有財務數據，返回分析狀態讓前端處理
-            if (!$has_financial_data) {
-                error_log(" 股票 $ticker 沒有財務數據，返回分析狀態 (total_years: {$financial_data['total_years']})");
-
+            // 如果有財務數據，直接返回，不需要調用 Python 腳本獲取即時價格
+            if ($has_financial_data) {
                 echo json_encode([
                     'success' => true,
-                    'status' => 'analyzing',
-                    'message' => '正在分析並獲取該股票的財務數據，請稍候...',
-                    'ticker' => $ticker,
-                    'needs_analysis' => true
+                    'data' => $financial_data,
+                    'requires_price_data' => true,  // 標記需要前端異步獲取價格
+                    'message' => '已找到財務數據'
                 ]);
                 exit;
             }
 
-            // 添加調試日誌
-            error_log(" 股票 $ticker 找到財務數據：{$financial_data['total_years']} 年數據");
-
-            // 獲取Python腳本的路徑
+            // 如果沒有財務數據，才執行 Python 腳本
             $python_script = dirname(__DIR__) . '/stock_info.py';
 
             // 檢查Python腳本是否存在
@@ -221,6 +215,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         exit;
+    }
+
+    // 獲取當前股價
+    if ($action === 'get_current_price') {
+        $ticker = strtoupper(trim($_POST['ticker'] ?? ''));
+
+        if (empty($ticker)) {
+            echo json_encode(['success' => false, 'error' => '股票代號不能為空']);
+            exit;
+        }
+
+        // 驗證股票代號格式
+        if (!preg_match('/^[A-Z0-9]{1,10}$/', $ticker)) {
+            echo json_encode(['success' => false, 'error' => '股票代號格式錯誤']);
+            exit;
+        }
+
+        try {
+            // 獲取Python腳本的路徑
+            $python_script = dirname(__DIR__) . '/get_current_price.py';
+
+            // 執行Python腳本獲取當前股價
+            $python_cmd = PYTHON_COMMAND;
+            $command = "\"$python_cmd\" \"$python_script\" \"$ticker\" 2>&1";
+            $output = shell_exec($command);
+
+            if ($output === null) {
+                echo json_encode(['success' => false, 'error' => '無法獲取股價資訊']);
+                exit;
+            }
+
+            $result = json_decode($output, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                echo json_encode(['success' => false, 'error' => '解析股價資訊時發生錯誤']);
+                exit;
+            }
+
+            if (!$result['success']) {
+                echo json_encode(['success' => false, 'error' => $result['error'] ?? '獲取股價失敗']);
+                exit;
+            }
+
+            echo json_encode([
+                'success' => true,
+                'price' => $result['price'],
+                'change' => $result['change'],
+                'change_percent' => $result['change_percent']
+            ]);
+            exit;
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => '獲取股價時發生錯誤: ' . $e->getMessage()]);
+            exit;
+        }
     }
 
     // 新增：專門處理財務數據分析的 API 端點

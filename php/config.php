@@ -14,7 +14,7 @@ function getEnvVar($key, $default = null)
 }
 
 // 資料庫配置 - 支援環境變數
-define('DB_HOST', getEnvVar('DB_HOST', '43.207.210.147'));
+define('DB_HOST', getEnvVar('DB_HOST', '13.114.174.139'));
 define('DB_NAME', getEnvVar('DB_NAME', 'finbot_db'));
 define('DB_USER', getEnvVar('DB_USER', 'myuser'));
 define('DB_PASS', getEnvVar('DB_PASS', '123456789'));

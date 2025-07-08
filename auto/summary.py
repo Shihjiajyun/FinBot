@@ -13,6 +13,8 @@ import time
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional
+from dotenv import load_dotenv
+load_dotenv()
 
 class AutoGPTSummarizer:
     """自動 GPT 摘要處理器"""
@@ -35,7 +37,7 @@ class AutoGPTSummarizer:
         )
         
         self.db_config = db_config or {
-            'host': '43.207.210.147',
+            'host': '13.114.174.139',
             'database': 'finbot_db',
             'user': 'myuser',
             'password': '123456789',
@@ -978,7 +980,7 @@ def main():
     
     # 資料庫配置
     db_config = {
-        'host': '43.207.210.147',
+        'host': '13.114.174.139',
         'user': 'myuser',
         'password': '123456789',
         'database': 'finbot_db',

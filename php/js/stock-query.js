@@ -50,6 +50,10 @@ function searchStock() {
                 showAnalyzingState(ticker, data.message);
                 // 開始輪詢檢查分析狀態
                 pollAnalysisStatus(ticker);
+            } else if (data.requires_price_data) {
+                // 如果需要價格數據，先顯示財務數據，然後異步加載價格
+                displayStockInfo(null, data.data, false);
+                loadCurrentStockPrice(ticker);
             } else {
                 displayStockInfo(data.stock_info, data.financial_data, data.data_freshly_analyzed);
             }
@@ -2660,4 +2664,50 @@ function fixStockData(ticker) {
             fixButton.disabled = false;
         }
     });
+}
+
+// 新增函數：異步加載當前股價
+async function loadCurrentStockPrice(ticker) {
+    try {
+        const formData = new FormData();
+        formData.append('action', 'get_current_price');
+        formData.append('ticker', ticker);
+
+        const response = await fetch('stock_api.php', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+            // 更新價格相關的UI元素
+            const priceElements = document.querySelectorAll('.stock-price');
+            priceElements.forEach(element => {
+                element.textContent = `$${data.price.toFixed(2)}`;
+                element.classList.remove('loading');
+            });
+
+            // 更新漲跌幅
+            const changeElements = document.querySelectorAll('.stock-change');
+            changeElements.forEach(element => {
+                const change = data.change.toFixed(2);
+                const changePercent = data.change_percent.toFixed(2);
+                const isPositive = data.change >= 0;
+                
+                element.textContent = `${isPositive ? '+' : ''}${change} (${changePercent}%)`;
+                element.className = `stock-change ${isPositive ? 'positive' : 'negative'}`;
+                element.classList.remove('loading');
+            });
+        }
+    } catch (error) {
+        console.error('加載股價時發生錯誤:', error);
+        // 在UI上顯示錯誤狀態
+        const priceElements = document.querySelectorAll('.stock-price, .stock-change');
+        priceElements.forEach(element => {
+            element.textContent = '載入失敗';
+            element.classList.add('error');
+            element.classList.remove('loading');
+        });
+    }
 } 

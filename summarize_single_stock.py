@@ -33,13 +33,13 @@ class SingleStockGPTSummarizer:
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
             raise ValueError("請設置 OPENAI_API_KEY 環境變量")
-            
+        
         self.openai_client = openai.OpenAI(
             api_key=api_key
         )
         
         self.db_config = db_config or {
-            'host': '43.207.210.147',
+            'host': '13.114.174.139',
             'database': 'finbot_db',
             'user': 'myuser',
             'password': '123456789',
@@ -993,7 +993,7 @@ def main():
     
     # 資料庫配置
     db_config = {
-        'host': '43.207.210.147',
+        'host': '13.114.174.139',
         'user': 'myuser',
         'password': '123456789',
         'database': 'finbot_db',

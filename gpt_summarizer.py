@@ -460,7 +460,7 @@ def main():
     
     # 資料庫配置
     db_config = {
-        'host': '43.207.210.147',
+        'host': '13.114.174.139',
         'user': 'myuser',
         'password': '123456789',
         'database': 'finbot_db',
