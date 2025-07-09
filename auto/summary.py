@@ -37,9 +37,9 @@ class AutoGPTSummarizer:
         )
         
         self.db_config = db_config or {
-            'host': '13.114.174.139',
+            'host': '35.72.199.133',
             'database': 'finbot_db',
-            'user': 'myuser',
+            'user': 'admin_user',
             'password': '123456789',
             'charset': 'utf8mb4'
         }
@@ -980,8 +980,8 @@ def main():
     
     # 資料庫配置
     db_config = {
-        'host': '13.114.174.139',
-        'user': 'myuser',
+        'host': '35.72.199.133',
+        'user': 'admin_user',
         'password': '123456789',
         'database': 'finbot_db',
         'charset': 'utf8mb4'

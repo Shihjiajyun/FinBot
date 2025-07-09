@@ -34,9 +34,9 @@ class AlphaVantageProcessor:
         
         # 資料庫配置
         self.db_config = {
-            'host': '13.114.174.139',
+            'host': '35.72.199.133',
             'database': 'finbot_db',
-            'user': 'myuser',
+            'user': 'admin_user',
             'password': '123456789',
             'charset': 'utf8mb4'
         }
@@ -218,7 +218,11 @@ class AlphaVantageProcessor:
                     'income_before_tax': self.safe_convert_to_millions(income_data.get('incomeBeforeTax')),
                     'net_income': self.safe_convert_to_millions(income_data.get('netIncome')),
                     'cogs': self.safe_convert_to_millions(income_data.get('costOfRevenue')),
-                    'operating_expenses': self.safe_convert_to_millions(income_data.get('operatingExpenses'))
+                    'operating_expenses': self.safe_convert_to_millions(income_data.get('operatingExpenses')),
+                    # 新增：EPS 數據
+                    'eps_basic': self.safe_convert_float(income_data.get('reportedEPS')),
+                    # 新增：流通股數（從 weightedAverageShsOutDil 獲取，轉換為百萬股）
+                    'outstanding_shares': self.safe_convert_to_millions(income_data.get('weightedAverageShsOutDil'))
                 })
             
             # 從資產負債表抓取數據
@@ -242,11 +246,29 @@ class AlphaVantageProcessor:
             
             # 從現金流量表抓取數據
             if cash_data:
+                operating_cash_flow = self.safe_convert_to_millions(cash_data.get('operatingCashflow'))
+                cash_flow_investing = self.safe_convert_to_millions(cash_data.get('cashflowFromInvestment'))
+                
                 filing_data.update({
-                    'operating_cash_flow': self.safe_convert_to_millions(cash_data.get('operatingCashflow')),
-                    'cash_flow_investing': self.safe_convert_to_millions(cash_data.get('cashflowFromInvestment')),
+                    'operating_cash_flow': operating_cash_flow,
+                    'cash_flow_investing': cash_flow_investing,
                     'cash_flow_financing': self.safe_convert_to_millions(cash_data.get('cashflowFromFinancing'))
                 })
+                
+                # 計算自由現金流 = 經營現金流 + 投資現金流中的資本支出部分
+                # 注意：Alpha Vantage 的投資現金流通常是負數，代表現金流出
+                if operating_cash_flow is not None:
+                    # 嘗試從現金流數據中獲取資本支出
+                    capital_expenditures = self.safe_convert_to_millions(cash_data.get('capitalExpenditures'))
+                    if capital_expenditures is not None:
+                        # 資本支出通常是負數，自由現金流 = 經營現金流 + 資本支出
+                        filing_data['free_cash_flow'] = round(operating_cash_flow + capital_expenditures, 2)
+                    else:
+                        # 如果沒有明確的資本支出數據，使用簡化計算
+                        # 假設投資現金流主要是資本支出（這是簡化假設）
+                        if cash_flow_investing is not None and cash_flow_investing < 0:
+                            # 只考慮負的投資現金流（現金流出）作為資本支出的近似
+                            filing_data['free_cash_flow'] = round(operating_cash_flow + cash_flow_investing, 2)
             
             return filing_data
             
@@ -281,7 +303,8 @@ class AlphaVantageProcessor:
                         retained_earnings_balance = %s, current_assets = %s,
                         current_liabilities = %s, current_ratio = %s,
                         cash_flow_investing = %s, cash_flow_financing = %s,
-                        cash_and_cash_equivalents = %s, last_updated = NOW()
+                        cash_and_cash_equivalents = %s, eps_basic = %s,
+                        outstanding_shares = %s, free_cash_flow = %s, last_updated = NOW()
                     WHERE ticker = %s AND filing_year = %s
                 """
                 values = (
@@ -297,7 +320,8 @@ class AlphaVantageProcessor:
                     filing_data.get('current_assets'), filing_data.get('current_liabilities'),
                     filing_data.get('current_ratio'), filing_data.get('cash_flow_investing'),
                     filing_data.get('cash_flow_financing'), filing_data.get('cash_and_cash_equivalents'),
-                    filing_data.get('ticker'), filing_data.get('filing_year')
+                    filing_data.get('eps_basic'), filing_data.get('outstanding_shares'),
+                    filing_data.get('free_cash_flow'), filing_data.get('ticker'), filing_data.get('filing_year')
                 )
                 cursor.execute(update_query, values)
                 action = "更新"
@@ -311,10 +335,11 @@ class AlphaVantageProcessor:
                         cogs, operating_cash_flow, shareholders_equity, total_assets,
                         total_liabilities, long_term_debt, retained_earnings_balance,
                         current_assets, current_liabilities, current_ratio,
-                        cash_flow_investing, cash_flow_financing, cash_and_cash_equivalents
+                        cash_flow_investing, cash_flow_financing, cash_and_cash_equivalents,
+                        eps_basic, outstanding_shares, free_cash_flow
                     ) VALUES (
                         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     )
                 """
                 values = (
@@ -330,7 +355,9 @@ class AlphaVantageProcessor:
                     filing_data.get('long_term_debt'), filing_data.get('retained_earnings_balance'),
                     filing_data.get('current_assets'), filing_data.get('current_liabilities'),
                     filing_data.get('current_ratio'), filing_data.get('cash_flow_investing'),
-                    filing_data.get('cash_flow_financing'), filing_data.get('cash_and_cash_equivalents')
+                    filing_data.get('cash_flow_financing'), filing_data.get('cash_and_cash_equivalents'),
+                    filing_data.get('eps_basic'), filing_data.get('outstanding_shares'),
+                    filing_data.get('free_cash_flow')
                 )
                 cursor.execute(insert_query, values)
                 action = "插入"
